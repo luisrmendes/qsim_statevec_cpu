@@ -285,24 +285,25 @@ pub fn execute_shots(
 /// Executes multiple shots with stochastic noise.
 ///
 /// - `gate_error_prob`: after each gate, applies a random Pauli error (`X`, `Y`, or `Z`) on the same target qubit.
-/// - `readout_flip_prob`: for each measured qubit probability, applies a readout flip with `p`, i.e. `p -> 1 - p`.
+/// - `readout_flip_prob`: before measurement, applies a stochastic bit-flip (`X`) per qubit.
 ///
-/// Returns one measured-qubits vector per shot.
+/// Returns the accumulated noisy layer averaged by the number of shots.
 ///
 /// # Errors
 /// Returns error if operation target qubit is out of range or if noise probabilities are outside `[0.0, 1.0]`.
+#[must_use]
 pub fn execute_shots_noisy(
     quantum_instructions: Vec<(QuantumOp, TargetQubit)>,
     num_qubits: u32,
     shots: u32,
     noise_model: NoiseModel,
-) -> Result<Vec<MeasuredQubits>, String> {
+) -> Result<QubitLayer, String> {
     if !noise_model.is_valid() {
         return Err("Noise probabilities must be in the range [0.0, 1.0]".to_owned());
     }
 
     let mut rng = rand::thread_rng();
-    let mut shot_results = Vec::with_capacity(shots as usize);
+    let mut accumulated_qubit_layer = QubitLayer::new(num_qubits);
 
     for _ in 0..shots {
         let mut qubit_layer = QubitLayer::new(num_qubits);
@@ -331,17 +332,20 @@ pub fn execute_shots_noisy(
             }
         }
 
-        let mut measured = qubit_layer.measure_qubits();
-        for probability in &mut measured {
+        for qubit in 0..num_qubits {
             if rng.gen::<f64>() < noise_model.readout_flip_prob {
-                *probability = 1.0 - *probability;
+                qubit_layer.pauli_x(qubit);
             }
         }
 
-        shot_results.push(measured);
+        accumulated_qubit_layer += &qubit_layer;
     }
 
-    Ok(shot_results)
+    if shots > 0 {
+        accumulated_qubit_layer.scale_amplitudes(shots);
+    }
+
+    Ok(accumulated_qubit_layer)
 }
 
 /// The main abstraction of quantum circuit simulation.

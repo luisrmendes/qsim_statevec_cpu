@@ -105,13 +105,11 @@ fn test_execute_shots_noisy_zero_noise() {
     let result = execute_shots_noisy(instructions, 3, 3, noise);
     assert!(result.is_ok());
 
-    let shots = result.unwrap_or_default();
-    assert_eq!(3, shots.len());
-    for measured in shots {
-        assert_eq!(0.5, (measured[0] * 10.0).round() / 10.0);
-        assert_eq!(1.0, (measured[1] * 10.0).round() / 10.0);
-        assert_eq!(0.0, (measured[2] * 10.0).round() / 10.0);
-    }
+    let accumulated_layer = result.unwrap_or_else(|_| QubitLayer::new(3));
+    let measured = accumulated_layer.measure_qubits();
+    assert_eq!(0.5, (measured[0] * 10.0).round() / 10.0);
+    assert_eq!(1.0, (measured[1] * 10.0).round() / 10.0);
+    assert_eq!(0.0, (measured[2] * 10.0).round() / 10.0);
 }
 
 #[test]
@@ -125,12 +123,11 @@ fn test_execute_shots_noisy_readout_flip_full() {
     let result = execute_shots_noisy(instructions, 3, 2, noise);
     assert!(result.is_ok());
 
-    let shots = result.unwrap_or_default();
-    for measured in shots {
-        assert_eq!(1.0, measured[0]);
-        assert_eq!(1.0, measured[1]);
-        assert_eq!(1.0, measured[2]);
-    }
+    let accumulated_layer = result.unwrap_or_else(|_| QubitLayer::new(3));
+    let measured = accumulated_layer.measure_qubits();
+    assert_eq!(1.0, measured[0]);
+    assert_eq!(1.0, measured[1]);
+    assert_eq!(1.0, measured[2]);
 }
 
 #[test]
