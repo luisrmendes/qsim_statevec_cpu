@@ -12,8 +12,8 @@ fn main() {
         readout_flip_prob: 0.01,
     };
 
-    let noisy_shots = qsim_statevec_cpu::execute_shots_noisy(instructions, 3, 1000, noise_model)
-        .unwrap();
+    let noisy_shots =
+        qsim_statevec_cpu::execute_shots_noisy(instructions, 3, 1000, noise_model).unwrap();
 
     let mut avg = vec![0.0; 3];
     for shot in &noisy_shots {
