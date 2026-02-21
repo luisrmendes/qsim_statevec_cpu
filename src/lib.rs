@@ -32,6 +32,7 @@
 
 use num::pow;
 use num::Complex;
+use rand::Rng;
 use serde::de;
 use serde::de::{VariantAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -144,6 +145,18 @@ impl<'de> Deserialize<'de> for QuantumOp {
 
 pub type TargetQubit = u32;
 pub type MeasuredQubits = Vec<f64>;
+
+#[derive(Clone, Copy, Debug)]
+pub struct NoiseModel {
+    pub gate_error_prob: f64,
+    pub readout_flip_prob: f64,
+}
+
+impl NoiseModel {
+    fn is_valid(self) -> bool {
+        (0.0..=1.0).contains(&self.gate_error_prob) && (0.0..=1.0).contains(&self.readout_flip_prob)
+    }
+}
 
 /// Quantum Assembly parser module.
 /// Supports a simple subset of `OpenQASM` 3.0 (<https://openqasm.com/versions/3.0/index.html>)
@@ -267,6 +280,68 @@ pub fn execute_shots(
     }
 
     Ok(accumulated_qubit_layer)
+}
+
+/// Executes multiple shots with stochastic noise.
+///
+/// - `gate_error_prob`: after each gate, applies a random Pauli error (`X`, `Y`, or `Z`) on the same target qubit.
+/// - `readout_flip_prob`: for each measured qubit probability, applies a readout flip with `p`, i.e. `p -> 1 - p`.
+///
+/// Returns one measured-qubits vector per shot.
+///
+/// # Errors
+/// Returns error if operation target qubit is out of range or if noise probabilities are outside `[0.0, 1.0]`.
+pub fn execute_shots_noisy(
+    quantum_instructions: Vec<(QuantumOp, TargetQubit)>,
+    num_qubits: u32,
+    shots: u32,
+    noise_model: NoiseModel,
+) -> Result<Vec<MeasuredQubits>, String> {
+    if !noise_model.is_valid() {
+        return Err("Noise probabilities must be in the range [0.0, 1.0]".to_owned());
+    }
+
+    let mut rng = rand::thread_rng();
+    let mut shot_results = Vec::with_capacity(shots as usize);
+
+    for _ in 0..shots {
+        let mut qubit_layer = QubitLayer::new(num_qubits);
+
+        for (op, target_qubit) in quantum_instructions.iter().cloned() {
+            if target_qubit >= qubit_layer.get_num_qubits() {
+                return Err(format!(
+                    "Target qubit {target_qubit:?} is out of range. Size of layer is {}",
+                    qubit_layer.get_num_qubits()
+                ));
+            }
+
+            match op {
+                QuantumOp::PauliX => qubit_layer.pauli_x(target_qubit),
+                QuantumOp::PauliY => qubit_layer.pauli_y(target_qubit),
+                QuantumOp::PauliZ => qubit_layer.pauli_z(target_qubit),
+                QuantumOp::Hadamard => qubit_layer.hadamard(target_qubit),
+            }
+
+            if rng.gen::<f64>() < noise_model.gate_error_prob {
+                match rng.gen_range(0..3) {
+                    0 => qubit_layer.pauli_x(target_qubit),
+                    1 => qubit_layer.pauli_y(target_qubit),
+                    _ => qubit_layer.pauli_z(target_qubit),
+                }
+            }
+        }
+
+        let mut measured = qubit_layer.measure_qubits();
+        for probability in &mut measured {
+            if rng.gen::<f64>() < noise_model.readout_flip_prob {
+                *probability = 1.0 - *probability;
+            }
+        }
+
+        shot_results.push(measured);
+    }
+
+    Ok(shot_results)
 }
 
 /// The main abstraction of quantum circuit simulation.

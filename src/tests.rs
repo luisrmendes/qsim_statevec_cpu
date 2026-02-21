@@ -95,6 +95,57 @@ fn test_execute_shots_failed_execute() {
 }
 
 #[test]
+fn test_execute_shots_noisy_zero_noise() {
+    let instructions = vec![(QuantumOp::Hadamard, 0), (QuantumOp::PauliX, 1)];
+    let noise = NoiseModel {
+        gate_error_prob: 0.0,
+        readout_flip_prob: 0.0,
+    };
+
+    let result = execute_shots_noisy(instructions, 3, 3, noise);
+    assert!(result.is_ok());
+
+    let shots = result.unwrap_or_default();
+    assert_eq!(3, shots.len());
+    for measured in shots {
+        assert_eq!(0.5, (measured[0] * 10.0).round() / 10.0);
+        assert_eq!(1.0, (measured[1] * 10.0).round() / 10.0);
+        assert_eq!(0.0, (measured[2] * 10.0).round() / 10.0);
+    }
+}
+
+#[test]
+fn test_execute_shots_noisy_readout_flip_full() {
+    let instructions = vec![];
+    let noise = NoiseModel {
+        gate_error_prob: 0.0,
+        readout_flip_prob: 1.0,
+    };
+
+    let result = execute_shots_noisy(instructions, 3, 2, noise);
+    assert!(result.is_ok());
+
+    let shots = result.unwrap_or_default();
+    for measured in shots {
+        assert_eq!(1.0, measured[0]);
+        assert_eq!(1.0, measured[1]);
+        assert_eq!(1.0, measured[2]);
+    }
+}
+
+#[test]
+fn test_execute_shots_noisy_invalid_noise() {
+    let instructions = vec![(QuantumOp::PauliX, 0)];
+    let noise = NoiseModel {
+        gate_error_prob: 1.1,
+        readout_flip_prob: 0.0,
+    };
+
+    let result = execute_shots_noisy(instructions, 1, 1, noise);
+    assert!(result.is_err());
+}
+
+#[test]
 fn test_random_executions() {
     let mut q_layer: QubitLayer = QubitLayer::new(3);
     let instructions = vec![
