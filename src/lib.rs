@@ -37,6 +37,8 @@ use serde::de::{VariantAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 use std::fmt::Write;
+use std::ops::Add;
+use std::ops::AddAssign;
 
 /// Supported quantum operations, equivalent to quantum gates in a circuit.
 /// Operations with 'Par' suffix are experimental multi-threaded implementations, not guaranteed to improve performance.
@@ -235,6 +237,38 @@ pub mod qasm_parser {
     }
 }
 
+/// Executes multiple quantum assembly instructions with a specified number of shots.
+///
+/// # Examples
+/// ```
+/// use qsim_statevec_cpu::{execute_shots, QuantumOp};
+///
+/// let instructions = vec![(QuantumOp::PauliX, 0), (QuantumOp::PauliX, 1)];
+/// assert!(execute_shots(instructions, 2, 3).is_ok());
+/// ```
+///
+/// # Errors
+/// If operation target qubit is out of range.
+#[must_use]
+pub fn execute_shots(
+    quantum_instructions: Vec<(QuantumOp, TargetQubit)>,
+    num_qubits: u32,
+    shots: u32,
+) -> Result<QubitLayer, String> {
+    let mut accumulated_qubit_layer = QubitLayer::new(num_qubits);
+    for _ in 0..shots {
+        let mut qubit_layer = QubitLayer::new(num_qubits);
+        qubit_layer.execute(quantum_instructions.to_owned())?;
+        accumulated_qubit_layer += &qubit_layer;
+    }
+
+    if shots > 0 {
+        accumulated_qubit_layer.scale_amplitudes(shots);
+    }
+
+    Ok(accumulated_qubit_layer)
+}
+
 /// The main abstraction of quantum circuit simulation.
 /// Contains the complex values of each possible state.
 #[derive(Clone, PartialEq)]
@@ -354,6 +388,17 @@ impl QubitLayer {
         }
     }
 
+    fn scale_amplitudes(&mut self, scale: u32) {
+        let scale = scale as f64;
+        for amplitude in &mut self.main {
+            *amplitude /= scale;
+        }
+
+        for amplitude in &mut self.parity {
+            *amplitude /= scale;
+        }
+    }
+
     fn hadamard(&mut self, target_qubit: u32) {
         let hadamard_const = 1.0 / std::f64::consts::SQRT_2;
         for state in 0..self.main.len() {
@@ -457,6 +502,86 @@ impl fmt::Display for QubitLayer {
         }
         output.remove(0);
         write!(f, "{output}")
+    }
+}
+
+impl Add for QubitLayer {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        assert_eq!(
+            self.main.len(),
+            rhs.main.len(),
+            "Cannot add QubitLayers with different numbers of qubits"
+        );
+
+        let main = self
+            .main
+            .into_iter()
+            .zip(rhs.main)
+            .map(|(lhs, rhs)| lhs + rhs)
+            .collect();
+
+        let parity = self
+            .parity
+            .into_iter()
+            .zip(rhs.parity)
+            .map(|(lhs, rhs)| lhs + rhs)
+            .collect();
+
+        Self { main, parity }
+    }
+}
+
+impl Add<&QubitLayer> for &QubitLayer {
+    type Output = QubitLayer;
+
+    fn add(self, rhs: &QubitLayer) -> Self::Output {
+        assert_eq!(
+            self.main.len(),
+            rhs.main.len(),
+            "Cannot add QubitLayers with different numbers of qubits"
+        );
+
+        let main = self
+            .main
+            .iter()
+            .zip(rhs.main.iter())
+            .map(|(lhs, rhs)| *lhs + *rhs)
+            .collect();
+
+        let parity = self
+            .parity
+            .iter()
+            .zip(rhs.parity.iter())
+            .map(|(lhs, rhs)| *lhs + *rhs)
+            .collect();
+
+        QubitLayer { main, parity }
+    }
+}
+
+impl AddAssign<&QubitLayer> for QubitLayer {
+    fn add_assign(&mut self, rhs: &QubitLayer) {
+        assert_eq!(
+            self.main.len(),
+            rhs.main.len(),
+            "Cannot add QubitLayers with different numbers of qubits"
+        );
+
+        for (lhs, rhs_value) in self.main.iter_mut().zip(rhs.main.iter()) {
+            *lhs += *rhs_value;
+        }
+
+        for (lhs, rhs_value) in self.parity.iter_mut().zip(rhs.parity.iter()) {
+            *lhs += *rhs_value;
+        }
+    }
+}
+
+impl AddAssign for QubitLayer {
+    fn add_assign(&mut self, rhs: Self) {
+        *self += &rhs;
     }
 }
 

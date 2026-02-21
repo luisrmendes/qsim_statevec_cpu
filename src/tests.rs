@@ -1,17 +1,97 @@
 use super::*;
 
 #[test]
-fn test_measure_qubits() {
-    let mut q_layer: QubitLayer = QubitLayer::new(3);
-    for it in 0..q_layer.get_num_qubits() {
-        assert_eq!(0.0, q_layer.measure_qubits()[it as usize]);
-    }
+fn test_add_qubit_layers_owned() {
+    let mut lhs = QubitLayer::new(1);
+    lhs.main[1] = Complex::new(2.0, 0.0);
 
-    let _ = q_layer.execute(vec![]);
+    let mut rhs = QubitLayer::new(1);
+    rhs.main[1] = Complex::new(3.0, 0.0);
 
-    for it in 0..q_layer.get_num_qubits() {
-        assert_eq!(0.0, q_layer.measure_qubits()[it as usize]);
-    }
+    let sum = lhs + rhs;
+    assert_eq!(Complex::new(2.0, 0.0), sum.main[0]);
+    assert_eq!(Complex::new(5.0, 0.0), sum.main[1]);
+}
+
+#[test]
+fn test_add_qubit_layers_borrowed() {
+    let mut lhs = QubitLayer::new(1);
+    lhs.main[0] = Complex::new(0.5, 0.0);
+    lhs.main[1] = Complex::new(1.5, 0.0);
+
+    let mut rhs = QubitLayer::new(1);
+    rhs.main[0] = Complex::new(1.5, 0.0);
+    rhs.main[1] = Complex::new(0.5, 0.0);
+
+    let sum = &lhs + &rhs;
+    assert_eq!(Complex::new(2.0, 0.0), sum.main[0]);
+    assert_eq!(Complex::new(2.0, 0.0), sum.main[1]);
+}
+
+#[test]
+fn test_add_assign_qubit_layers_borrowed() {
+    let mut lhs = QubitLayer::new(1);
+    lhs.main[0] = Complex::new(0.5, 0.0);
+    lhs.main[1] = Complex::new(1.0, 0.0);
+
+    let mut rhs = QubitLayer::new(1);
+    rhs.main[0] = Complex::new(1.5, 0.0);
+    rhs.main[1] = Complex::new(2.0, 0.0);
+
+    lhs += &rhs;
+    assert_eq!(Complex::new(2.0, 0.0), lhs.main[0]);
+    assert_eq!(Complex::new(3.0, 0.0), lhs.main[1]);
+}
+
+#[test]
+fn test_add_assign_qubit_layers_owned() {
+    let mut lhs = QubitLayer::new(1);
+    lhs.main[1] = Complex::new(2.0, 0.0);
+
+    let mut rhs = QubitLayer::new(1);
+    rhs.main[1] = Complex::new(3.0, 0.0);
+
+    lhs += rhs;
+    assert_eq!(Complex::new(2.0, 0.0), lhs.main[0]);
+    assert_eq!(Complex::new(5.0, 0.0), lhs.main[1]);
+}
+
+#[test]
+#[should_panic(expected = "Cannot add QubitLayers with different numbers of qubits")]
+fn test_add_qubit_layers_size_mismatch_panics() {
+    let lhs = QubitLayer::new(1);
+    let rhs = QubitLayer::new(2);
+    let _ = lhs + rhs;
+}
+
+#[test]
+fn test_execute_shots() {
+    let instructions = vec![(QuantumOp::Hadamard, 0), (QuantumOp::PauliX, 1)];
+
+    let result = execute_shots(instructions, 3, 4);
+    assert!(result.is_ok());
+
+    let accumulated_layer = result.unwrap_or_else(|_| QubitLayer::new(3));
+    let measured = accumulated_layer.measure_qubits();
+    assert_eq!(0.5, (measured[0] * 10.0).round() / 10.0);
+    assert_eq!(1.0, (measured[1] * 10.0).round() / 10.0);
+    assert_eq!(0.0, (measured[2] * 10.0).round() / 10.0);
+}
+
+#[test]
+fn test_execute_shots_zero() {
+    let instructions = vec![(QuantumOp::Hadamard, 0)];
+
+    let result = execute_shots(instructions, 3, 0);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_execute_shots_failed_execute() {
+    let instructions = vec![(QuantumOp::PauliX, 10)];
+
+    let result = execute_shots(instructions, 3, 2);
+    assert!(result.is_err());
 }
 
 #[test]
@@ -31,6 +111,20 @@ fn test_random_executions() {
             0.0,
             (q_layer.measure_qubits()[it as usize] * 10.0).round() / 10.0
         );
+    }
+}
+
+#[test]
+fn test_measure_qubits() {
+    let mut q_layer: QubitLayer = QubitLayer::new(3);
+    for it in 0..q_layer.get_num_qubits() {
+        assert_eq!(0.0, q_layer.measure_qubits()[it as usize]);
+    }
+
+    let _ = q_layer.execute(vec![]);
+
+    for it in 0..q_layer.get_num_qubits() {
+        assert_eq!(0.0, q_layer.measure_qubits()[it as usize]);
     }
 }
 
