@@ -1,13 +1,13 @@
 //! Quantum circuit simulator
 //!
-//! Provides an abstraction for quantum circuit simulations.  
-//! Uses the state vector simulation method.  
-//! Memory consumption is 2 * 8 * 2<sup>`num_qubits`</sup> bytes. For example, simulating 25 qubits cost ~537 MB.  
+//! Provides an abstraction for quantum circuit simulations.
+//! Uses the state vector simulation method.
+//! Memory consumption is 2 * 8 * 2<sup>`num_qubits`</sup> bytes. For example, simulating 25 qubits cost ~537 MB.
 //!
 //! # Example
 //!
 //! ```
-//! use lrm_qsim_cpu::{QubitLayer, QuantumOp};
+//! use qsim_statevec_cpu::{QubitLayer, QuantumOp};
 //!
 //! let mut q_layer: QubitLayer = QubitLayer::new(20);
 //!
@@ -32,14 +32,13 @@
 
 use num::pow;
 use num::Complex;
-use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use serde::de;
 use serde::de::{VariantAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
-use std::sync::Mutex;
+use std::fmt::Write;
 
-/// Supported quantum operations, equivalent to quantum gates in a circuit.   
+/// Supported quantum operations, equivalent to quantum gates in a circuit.
 /// Operations with 'Par' suffix are experimental multi-threaded implementations, not guaranteed to improve performance.
 #[derive(Clone, PartialEq, Debug)]
 pub enum QuantumOp {
@@ -47,10 +46,6 @@ pub enum QuantumOp {
     PauliY,
     PauliZ,
     Hadamard,
-    PauliXPar,
-    PauliYPar,
-    PauliZPar,
-    HadamardPar,
 }
 
 impl Serialize for QuantumOp {
@@ -63,12 +58,6 @@ impl Serialize for QuantumOp {
             QuantumOp::PauliY => serializer.serialize_unit_variant("QuantumOp", 1, "PauliY"),
             QuantumOp::PauliZ => serializer.serialize_unit_variant("QuantumOp", 1, "PauliZ"),
             QuantumOp::Hadamard => serializer.serialize_unit_variant("QuantumOp", 1, "Hadamard"),
-            QuantumOp::PauliXPar => serializer.serialize_unit_variant("QuantumOp", 0, "PauliXPar"),
-            QuantumOp::PauliYPar => serializer.serialize_unit_variant("QuantumOp", 1, "PauliYPar"),
-            QuantumOp::PauliZPar => serializer.serialize_unit_variant("QuantumOp", 1, "PauliZPar"),
-            QuantumOp::HadamardPar => {
-                serializer.serialize_unit_variant("QuantumOp", 1, "HadamardPar")
-            }
         }
     }
 }
@@ -83,10 +72,6 @@ impl<'de> Deserialize<'de> for QuantumOp {
             PauliY,
             PauliZ,
             Hadamard,
-            PauliXPar,
-            PauliYPar,
-            PauliZPar,
-            HadamardPar,
         }
         impl<'de> Deserialize<'de> for Field {
             fn deserialize<D>(deserializer: D) -> Result<Field, D::Error>
@@ -95,11 +80,11 @@ impl<'de> Deserialize<'de> for QuantumOp {
             {
                 struct FieldVisitor;
 
-                impl<'de> Visitor<'de> for FieldVisitor {
+                impl Visitor<'_> for FieldVisitor {
                     type Value = Field;
 
                     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                        formatter.write_str("`PauliX`, `PauliY`, `PauliZ`, `Hadamard`, `PauliXPar`, `PauliYPar`, `PauliZPar`, `HadamardPar`")
+                        formatter.write_str("`PauliX`, `PauliY`, `PauliZ`, `Hadamard`")
                     }
 
                     fn visit_str<E>(self, value: &str) -> Result<Field, E>
@@ -111,23 +96,10 @@ impl<'de> Deserialize<'de> for QuantumOp {
                             "PauliY" => Ok(Field::PauliY),
                             "PauliZ" => Ok(Field::PauliZ),
                             "Hadamard" => Ok(Field::Hadamard),
-                            "PauliXPar" => Ok(Field::PauliXPar),
-                            "PauliYPar" => Ok(Field::PauliYPar),
-                            "PauliZPar" => Ok(Field::PauliZPar),
-                            "HadamardPar" => Ok(Field::HadamardPar),
 
                             _ => Err(de::Error::unknown_variant(
                                 value,
-                                &[
-                                    "PauliX",
-                                    "PauliY",
-                                    "PauliZ",
-                                    "Hadamard",
-                                    "PauliXPar",
-                                    "PauliYPar",
-                                    "PauliZPar",
-                                    "HadamardPar",
-                                ],
+                                &["PauliX", "PauliY", "PauliZ", "Hadamard"],
                             )),
                         }
                     }
@@ -156,26 +128,13 @@ impl<'de> Deserialize<'de> for QuantumOp {
                     Field::PauliY => variant.unit_variant().map(|()| QuantumOp::PauliY),
                     Field::PauliZ => variant.unit_variant().map(|()| QuantumOp::PauliX),
                     Field::Hadamard => variant.unit_variant().map(|()| QuantumOp::Hadamard),
-                    Field::PauliXPar => variant.unit_variant().map(|()| QuantumOp::PauliXPar),
-                    Field::PauliYPar => variant.unit_variant().map(|()| QuantumOp::PauliYPar),
-                    Field::PauliZPar => variant.unit_variant().map(|()| QuantumOp::PauliZPar),
-                    Field::HadamardPar => variant.unit_variant().map(|()| QuantumOp::HadamardPar),
                 }
             }
         }
 
         deserializer.deserialize_enum(
             "QuantumOp",
-            &[
-                "PauliX",
-                "PauliY",
-                "PauliZ",
-                "Hadamard",
-                "PauliXPar",
-                "PauliYPar",
-                "PauliZPar",
-                "HadamardPar",
-            ],
+            &["PauliX", "PauliY", "PauliZ", "Hadamard"],
             MyEnumVisitor,
         )
     }
@@ -184,7 +143,7 @@ impl<'de> Deserialize<'de> for QuantumOp {
 pub type TargetQubit = u32;
 pub type MeasuredQubits = Vec<f64>;
 
-/// Quantum Assembly parser module.  
+/// Quantum Assembly parser module.
 /// Supports a simple subset of `OpenQASM` 3.0 (<https://openqasm.com/versions/3.0/index.html>)
 pub mod qasm_parser {
     use crate::QuantumOp;
@@ -213,7 +172,6 @@ pub mod qasm_parser {
                 break;
             }
             remove_delim += 1;
-            continue;
         }
 
         // Parse the number of qubits
@@ -277,7 +235,7 @@ pub mod qasm_parser {
     }
 }
 
-/// The main abstraction of quantum circuit simulation.  
+/// The main abstraction of quantum circuit simulation.
 /// Contains the complex values of each possible state.
 #[derive(Clone, PartialEq)]
 pub struct QubitLayer {
@@ -286,12 +244,12 @@ pub struct QubitLayer {
 }
 
 impl QubitLayer {
-    /// Executes multiple quantum assembly instructions.  
+    /// Executes multiple quantum assembly instructions.
     /// Receives a vector containing pairs of (`QuantumOp`, `TargetQubit`).
     ///
     /// # Examples
     /// ```
-    /// use lrm_qsim_cpu::{QubitLayer, QuantumOp};
+    /// use qsim_statevec_cpu::{QubitLayer, QuantumOp};
     ///
     /// let mut q_layer = QubitLayer::new(2);
     /// let instructions = vec![(QuantumOp::PauliX, 0), (QuantumOp::PauliX, 1)];
@@ -329,18 +287,6 @@ impl QubitLayer {
                 QuantumOp::Hadamard => {
                     self.hadamard(target_qubit);
                 }
-                QuantumOp::PauliXPar => {
-                    self.pauli_x_par(target_qubit);
-                }
-                QuantumOp::PauliYPar => {
-                    self.pauli_y_par(target_qubit);
-                }
-                QuantumOp::PauliZPar => {
-                    self.pauli_z_par(target_qubit);
-                }
-                QuantumOp::HadamardPar => {
-                    self.hadamard_par(target_qubit);
-                }
             }
         }
         Ok(())
@@ -348,7 +294,7 @@ impl QubitLayer {
 
     /// Returns the number of qubits represented in the `QubitLayer`.  
     /// ```
-    /// use lrm_qsim_cpu::QubitLayer;
+    /// use qsim_statevec_cpu::QubitLayer;
     ///
     /// let num_qubits = 20;
     /// let q_layer = QubitLayer::new(num_qubits);
@@ -359,11 +305,11 @@ impl QubitLayer {
         self.main.len().ilog2()
     }
 
-    /// Returns the results of the operations performed in the `QubitLayer`.  
+    /// Returns the results of the operations performed in the `QubitLayer`.
     /// Equivalent to collapsing qubits to obtain its state.
     /// # Examples
     /// ```
-    /// use lrm_qsim_cpu::{QubitLayer, QuantumOp};
+    /// use qsim_statevec_cpu::{QubitLayer, QuantumOp};
     ///
     /// let mut q_layer = QubitLayer::new(20);
     /// q_layer.execute(vec![(QuantumOp::Hadamard, 0)]);
@@ -393,7 +339,7 @@ impl QubitLayer {
     /// Creates a new `QubitLayer` representing `num_qubits` qubits.  
     /// # Examples
     /// ```
-    /// use lrm_qsim_cpu::QubitLayer;
+    /// use qsim_statevec_cpu::QubitLayer;
     ///
     /// let q_layer = QubitLayer::new(20);
     /// ```
@@ -406,80 +352,6 @@ impl QubitLayer {
             main,
             parity: vec![Complex::new(0.0, 0.0); 2_usize.pow(num_qubits)],
         }
-    }
-
-    fn hadamard_par(&mut self, target_qubit: u32) {
-        let hadamard_const = 1.0 / std::f64::consts::SQRT_2;
-        let parity_mutex = Mutex::new(&mut self.parity);
-
-        self.main
-            .par_iter()
-            .enumerate()
-            .for_each(|(state, &main_value)| {
-                if main_value != Complex::new(0.0, 0.0) {
-                    if state & Self::mask(target_qubit as usize) != 0 {
-                        parity_mutex.lock().unwrap()[state] -= hadamard_const * main_value;
-                    } else {
-                        parity_mutex.lock().unwrap()[state] += hadamard_const * main_value;
-                    }
-                }
-            });
-
-        self.main
-            .par_iter()
-            .enumerate()
-            .for_each(|(state, &main_value)| {
-                if main_value != Complex::new(0.0, 0.0) {
-                    let target_state: usize = state ^ Self::mask(target_qubit as usize);
-                    parity_mutex.lock().unwrap()[target_state] += hadamard_const * main_value;
-                }
-            });
-
-        self.reset_parity_layer();
-    }
-
-    fn pauli_z_par(&mut self, target_qubit: u32) {
-        let parity_mutex = Mutex::new(&mut self.parity);
-        self.main.par_iter().enumerate().for_each(|(state, value)| {
-            if *value != Complex::new(0.0, 0.0) {
-                if state & Self::mask(target_qubit as usize) != 0 {
-                    parity_mutex.lock().unwrap()[state] = -*value;
-                } else {
-                    parity_mutex.lock().unwrap()[state] = *value;
-                }
-            }
-        });
-
-        self.reset_parity_layer();
-    }
-
-    fn pauli_y_par(&mut self, target_qubit: u32) {
-        let parity_mutex = Mutex::new(&mut self.parity);
-        self.main.par_iter().enumerate().for_each(|(state, value)| {
-            if *value != Complex::new(0.0, 0.0) {
-                let target_state: usize = state ^ Self::mask(target_qubit as usize);
-                if target_state & Self::mask(target_qubit as usize) != 0 {
-                    parity_mutex.lock().unwrap()[target_state] = *value * Complex::new(0.0, 1.0);
-                } else {
-                    parity_mutex.lock().unwrap()[target_state] = *value * Complex::new(0.0, -1.0);
-                }
-            }
-        });
-
-        self.reset_parity_layer();
-    }
-
-    fn pauli_x_par(&mut self, target_qubit: u32) {
-        let parity_mutex = Mutex::new(&mut self.parity);
-        self.main.par_iter().enumerate().for_each(|(state, value)| {
-            if *value != Complex::new(0.0, 0.0) {
-                let mut target_state: usize = state;
-                target_state ^= Self::mask(target_qubit as usize); // flip bit 0
-                parity_mutex.lock().unwrap()[target_state] = *value;
-            }
-        });
-
-        self.reset_parity_layer();
     }
 
     fn hadamard(&mut self, target_qubit: u32) {
@@ -566,7 +438,11 @@ impl fmt::Debug for QubitLayer {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut output = String::new();
         for index_main in 0..self.main.len() {
-            output += &format!("state {:b} -> {1}\n", index_main, self.main[index_main]);
+            writeln!(
+                &mut output,
+                "state {:b} -> {}",
+                index_main, self.main[index_main]
+            )?;
         }
         write!(f, "{output}")
     }
@@ -585,313 +461,4 @@ impl fmt::Display for QubitLayer {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_measure_qubits() {
-        let mut q_layer: QubitLayer = QubitLayer::new(3);
-        for it in 0..q_layer.get_num_qubits() {
-            assert_eq!(0.0, q_layer.measure_qubits()[it as usize]);
-        }
-
-        let _ = q_layer.execute(vec![]);
-
-        for it in 0..q_layer.get_num_qubits() {
-            assert_eq!(0.0, q_layer.measure_qubits()[it as usize]);
-        }
-    }
-
-    #[test]
-    fn test_random_executions() {
-        let mut q_layer: QubitLayer = QubitLayer::new(3);
-        let instructions = vec![
-            (QuantumOp::Hadamard, 0),
-            (QuantumOp::Hadamard, 1),
-            (QuantumOp::Hadamard, 2),
-            (QuantumOp::Hadamard, 0),
-            (QuantumOp::Hadamard, 1),
-            (QuantumOp::Hadamard, 2),
-            (QuantumOp::HadamardPar, 0),
-            (QuantumOp::HadamardPar, 1),
-            (QuantumOp::HadamardPar, 2),
-            (QuantumOp::HadamardPar, 0),
-            (QuantumOp::HadamardPar, 1),
-            (QuantumOp::HadamardPar, 2),
-        ];
-        let _ = q_layer.execute(instructions);
-        for it in 0..q_layer.get_num_qubits() {
-            assert_eq!(
-                0.0,
-                (q_layer.measure_qubits()[it as usize] * 10.0).round() / 10.0
-            );
-        }
-    }
-
-    #[test]
-    fn test_spins_on_superposition() {
-        let mut q_layer: QubitLayer = QubitLayer::new(3);
-        let instructions = vec![
-            (QuantumOp::Hadamard, 0),
-            (QuantumOp::Hadamard, 1),
-            (QuantumOp::Hadamard, 2),
-            (QuantumOp::PauliX, 0),
-            (QuantumOp::PauliY, 1),
-            (QuantumOp::PauliZ, 2),
-            (QuantumOp::PauliXPar, 0),
-            (QuantumOp::PauliYPar, 1),
-            (QuantumOp::PauliZPar, 2),
-        ];
-        let _ = q_layer.execute(instructions);
-        for it in 0..q_layer.get_num_qubits() {
-            assert_eq!(
-                0.5,
-                (q_layer.measure_qubits()[it as usize] * 10.0).round() / 10.0
-            );
-        }
-    }
-
-    #[test]
-    fn test_failed_execute() {
-        let mut q_layer: QubitLayer = QubitLayer::new(10);
-        let instructions = vec![(QuantumOp::PauliX, 10)]; // index goes up to 9
-
-        let result: Result<(), String> = q_layer.execute(instructions);
-        assert!(result.is_err());
-
-        let result: Result<(), String> = q_layer.execute(vec![(QuantumOp::Hadamard, 2112)]);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_execute() {
-        let mut q_layer: QubitLayer = QubitLayer::new(10);
-        let instructions = vec![
-            (QuantumOp::PauliX, 0),
-            (QuantumOp::PauliY, 1),
-            (QuantumOp::PauliZ, 2),
-            (QuantumOp::Hadamard, 3),
-            (QuantumOp::PauliXPar, 4),
-            (QuantumOp::PauliYPar, 5),
-            (QuantumOp::PauliZPar, 6),
-            (QuantumOp::HadamardPar, 7),
-        ];
-
-        if let Err(e) = q_layer.execute(instructions) {
-            panic!("Should not panic!. Error: {e}");
-        }
-
-        assert_eq!(1.0, q_layer.measure_qubits()[0].round());
-    }
-
-    #[test]
-    fn test_get_num_qubits() {
-        let num_qubits = 10;
-        let q_layer: QubitLayer = QubitLayer::new(num_qubits);
-        assert_eq!(num_qubits, q_layer.get_num_qubits());
-    }
-
-    #[test]
-    fn test_display_trait_print() {
-        let q_layer: QubitLayer = QubitLayer::new(2);
-        let expected = "1+0i 0+0i 0+0i 0+0i";
-        println!("{}", q_layer);
-        assert_eq!(expected, format!("{}", q_layer));
-    }
-
-    #[test]
-    fn test_debug_trait_print() {
-        let q_layer: QubitLayer = QubitLayer::new(2);
-        let expected = "state 0 -> 1+0i\nstate 1 -> 0+0i\nstate 10 -> 0+0i\nstate 11 -> 0+0i\n";
-        println!("{:?}", q_layer);
-        assert_eq!(expected, format!("{:?}", q_layer));
-    }
-
-    #[test]
-    fn test_hadamard_par_simple() {
-        let hadamard_const = 1.0 / std::f64::consts::SQRT_2;
-        let num_qubits = 3;
-        let mut q_layer: QubitLayer = QubitLayer::new(num_qubits);
-        q_layer.hadamard_par(0);
-        let mut test_vec = vec![Complex::new(0.0, 0.0); 2_usize.pow(num_qubits)];
-        test_vec[0] = Complex::new(hadamard_const, 0.0);
-        test_vec[1] = Complex::new(hadamard_const, 0.0);
-        assert_eq!(test_vec, q_layer.main);
-
-        let mut q_layer: QubitLayer = QubitLayer::new(num_qubits);
-        q_layer.hadamard_par(2);
-        let mut test_vec = vec![Complex::new(0.0, 0.0); 2_usize.pow(num_qubits)];
-        test_vec[0] = Complex::new(hadamard_const, 0.0);
-        test_vec[4] = Complex::new(hadamard_const, 0.0);
-        assert_eq!(test_vec, q_layer.main);
-        q_layer = QubitLayer::new(num_qubits);
-        q_layer.hadamard_par(0);
-        q_layer.hadamard_par(1);
-        q_layer.hadamard_par(2);
-        let test_vec = vec![Complex::new(pow(hadamard_const, 3), 0.0); 2_usize.pow(num_qubits)];
-        assert_eq!(test_vec, q_layer.main);
-    }
-
-    #[test]
-    fn test_pauli_z_par_simple() {
-        let num_qubits = 3;
-        let mut q_layer: QubitLayer = QubitLayer::new(num_qubits);
-        q_layer.pauli_z_par(0);
-        let mut test_vec = vec![Complex::new(0.0, 0.0); 2_usize.pow(num_qubits)];
-        test_vec[0] = Complex::new(1.0, 0.0);
-        assert_eq!(test_vec, q_layer.main);
-
-        let mut q_layer: QubitLayer = QubitLayer::new(num_qubits);
-        q_layer.pauli_z_par(2);
-        let mut test_vec = vec![Complex::new(0.0, 0.0); 2_usize.pow(num_qubits)];
-        test_vec[0] = Complex::new(1.0, 0.0);
-        assert_eq!(test_vec, q_layer.main);
-        q_layer = QubitLayer::new(num_qubits);
-        q_layer.pauli_z_par(0);
-        q_layer.pauli_z_par(1);
-        q_layer.pauli_z_par(2);
-        let mut test_vec = vec![Complex::new(0.0, 0.0); 2_usize.pow(num_qubits)];
-        test_vec[0] = Complex::new(1.0, 0.0);
-        assert_eq!(test_vec, q_layer.main);
-    }
-
-    #[test]
-    fn test_pauli_y_par_simple() {
-        let num_qubits = 3;
-        let mut q_layer: QubitLayer = QubitLayer::new(num_qubits);
-        q_layer.pauli_y_par(0);
-        let mut test_vec = vec![Complex::new(0.0, 0.0); 2_usize.pow(num_qubits)];
-        test_vec[1] = Complex::new(0.0, 1.0);
-        assert_eq!(test_vec, q_layer.main);
-
-        let mut q_layer: QubitLayer = QubitLayer::new(num_qubits);
-        q_layer.pauli_y_par(2);
-        let mut test_vec = vec![Complex::new(0.0, 0.0); 2_usize.pow(num_qubits)];
-        test_vec[4] = Complex::new(0.0, 1.0);
-        assert_eq!(test_vec, q_layer.main);
-        q_layer = QubitLayer::new(num_qubits);
-        q_layer.pauli_y_par(0);
-        q_layer.pauli_y_par(1);
-        q_layer.pauli_y_par(2);
-        let mut test_vec = vec![Complex::new(0.0, 0.0); 2_usize.pow(num_qubits)];
-        test_vec[7] = Complex::new(0.0, -1.0);
-        assert_eq!(test_vec, q_layer.main);
-    }
-
-    #[test]
-    fn test_pauli_x_par_simple() {
-        let num_qubits = 3;
-        let mut q_layer: QubitLayer = QubitLayer::new(num_qubits);
-        q_layer.pauli_x_par(0);
-        let mut test_vec = vec![Complex::new(0.0, 0.0); 2_usize.pow(num_qubits)];
-        test_vec[1] = Complex::new(1.0, 0.0);
-        assert_eq!(test_vec, q_layer.main);
-
-        let mut q_layer: QubitLayer = QubitLayer::new(num_qubits);
-        q_layer.pauli_x_par(2);
-        let mut test_vec = vec![Complex::new(0.0, 0.0); 2_usize.pow(num_qubits)];
-        test_vec[4] = Complex::new(1.0, 0.0);
-        assert_eq!(test_vec, q_layer.main);
-        q_layer = QubitLayer::new(num_qubits);
-        q_layer.pauli_x_par(0);
-        q_layer.pauli_x_par(1);
-        q_layer.pauli_x_par(2);
-        let mut test_vec = vec![Complex::new(0.0, 0.0); 2_usize.pow(num_qubits)];
-        test_vec[7] = Complex::new(1.0, 0.0);
-        assert_eq!(test_vec, q_layer.main);
-    }
-
-    #[test]
-    fn test_hadamard_simple() {
-        let hadamard_const = 1.0 / std::f64::consts::SQRT_2;
-        let num_qubits = 3;
-        let mut q_layer: QubitLayer = QubitLayer::new(num_qubits);
-        q_layer.hadamard(0);
-        let mut test_vec = vec![Complex::new(0.0, 0.0); 2_usize.pow(num_qubits)];
-        test_vec[0] = Complex::new(hadamard_const, 0.0);
-        test_vec[1] = Complex::new(hadamard_const, 0.0);
-        assert_eq!(test_vec, q_layer.main);
-
-        let mut q_layer: QubitLayer = QubitLayer::new(num_qubits);
-        q_layer.hadamard(2);
-        let mut test_vec = vec![Complex::new(0.0, 0.0); 2_usize.pow(num_qubits)];
-        test_vec[0] = Complex::new(hadamard_const, 0.0);
-        test_vec[4] = Complex::new(hadamard_const, 0.0);
-        assert_eq!(test_vec, q_layer.main);
-        q_layer = QubitLayer::new(num_qubits);
-        q_layer.hadamard(0);
-        q_layer.hadamard(1);
-        q_layer.hadamard(2);
-        let test_vec = vec![Complex::new(pow(hadamard_const, 3), 0.0); 2_usize.pow(num_qubits)];
-        assert_eq!(test_vec, q_layer.main);
-    }
-
-    #[test]
-    fn test_pauli_z_simple() {
-        let num_qubits = 3;
-        let mut q_layer: QubitLayer = QubitLayer::new(num_qubits);
-        q_layer.pauli_z(0);
-        let mut test_vec = vec![Complex::new(0.0, 0.0); 2_usize.pow(num_qubits)];
-        test_vec[0] = Complex::new(1.0, 0.0);
-        assert_eq!(test_vec, q_layer.main);
-
-        let mut q_layer: QubitLayer = QubitLayer::new(num_qubits);
-        q_layer.pauli_z(2);
-        let mut test_vec = vec![Complex::new(0.0, 0.0); 2_usize.pow(num_qubits)];
-        test_vec[0] = Complex::new(1.0, 0.0);
-        assert_eq!(test_vec, q_layer.main);
-        q_layer = QubitLayer::new(num_qubits);
-        q_layer.pauli_z(0);
-        q_layer.pauli_z(1);
-        q_layer.pauli_z(2);
-        let mut test_vec = vec![Complex::new(0.0, 0.0); 2_usize.pow(num_qubits)];
-        test_vec[0] = Complex::new(1.0, 0.0);
-        assert_eq!(test_vec, q_layer.main);
-    }
-
-    #[test]
-    fn test_pauli_y_simple() {
-        let num_qubits = 3;
-        let mut q_layer: QubitLayer = QubitLayer::new(num_qubits);
-        q_layer.pauli_y(0);
-        let mut test_vec = vec![Complex::new(0.0, 0.0); 2_usize.pow(num_qubits)];
-        test_vec[1] = Complex::new(0.0, 1.0);
-        assert_eq!(test_vec, q_layer.main);
-
-        let mut q_layer: QubitLayer = QubitLayer::new(num_qubits);
-        q_layer.pauli_y(2);
-        let mut test_vec = vec![Complex::new(0.0, 0.0); 2_usize.pow(num_qubits)];
-        test_vec[4] = Complex::new(0.0, 1.0);
-        assert_eq!(test_vec, q_layer.main);
-        q_layer = QubitLayer::new(num_qubits);
-        q_layer.pauli_y(0);
-        q_layer.pauli_y(1);
-        q_layer.pauli_y(2);
-        let mut test_vec = vec![Complex::new(0.0, 0.0); 2_usize.pow(num_qubits)];
-        test_vec[7] = Complex::new(0.0, -1.0);
-        assert_eq!(test_vec, q_layer.main);
-    }
-
-    #[test]
-    fn test_pauli_x_simple() {
-        let num_qubits = 3;
-        let mut q_layer: QubitLayer = QubitLayer::new(num_qubits);
-        q_layer.pauli_x(0);
-        let mut test_vec = vec![Complex::new(0.0, 0.0); 2_usize.pow(num_qubits)];
-        test_vec[1] = Complex::new(1.0, 0.0);
-        assert_eq!(test_vec, q_layer.main);
-
-        let mut q_layer: QubitLayer = QubitLayer::new(num_qubits);
-        q_layer.pauli_x(2);
-        let mut test_vec = vec![Complex::new(0.0, 0.0); 2_usize.pow(num_qubits)];
-        test_vec[4] = Complex::new(1.0, 0.0);
-        assert_eq!(test_vec, q_layer.main);
-        q_layer = QubitLayer::new(num_qubits);
-        q_layer.pauli_x(0);
-        q_layer.pauli_x(1);
-        q_layer.pauli_x(2);
-        let mut test_vec = vec![Complex::new(0.0, 0.0); 2_usize.pow(num_qubits)];
-        test_vec[7] = Complex::new(1.0, 0.0);
-        assert_eq!(test_vec, q_layer.main);
-    }
-}
+mod tests;

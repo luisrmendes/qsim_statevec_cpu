@@ -1,8 +1,8 @@
-# lrm_qsim_cpu
+# qsim_statevec_cpu
 
-[![CI](https://github.com/luisrmendes/lrm_qsim_cpu/actions/workflows/codeChecks.yml/badge.svg)](https://github.com/luisrmendes/lrm_qsim_cpu/actions/workflows/codeChecks.yml)
-[![Security Audit](https://github.com/luisrmendes/lrm_qsim_cpu/actions/workflows/audit.yml/badge.svg)](https://github.com/luisrmendes/lrm_qsim_cpu/actions/workflows/audit.yml)
-[![License](https://img.shields.io/badge/license-MIT_OR_Apache--2.0-blue.svg)](https://github.com/luisrmendes/lrm_qsim_cpu#license)
+[![CI](https://github.com/luisrmendes/qsim_statevec_cpu/actions/workflows/codeChecks.yml/badge.svg)](https://github.com/luisrmendes/qsim_statevec_cpu/actions/workflows/codeChecks.yml)
+[![Security Audit](https://github.com/luisrmendes/qsim_statevec_cpu/actions/workflows/audit.yml/badge.svg)](https://github.com/luisrmendes/qsim_statevec_cpu/actions/workflows/audit.yml)
+[![License](https://img.shields.io/badge/license-MIT_OR_Apache--2.0-blue.svg)](https://github.com/luisrmendes/qsim_statevec_cpu#license)
 [![Cargo](https://img.shields.io/crates/v/quantum_state_sim.svg)](https://docs.rs/quantum_state_sim/0.1.0/quantum_state_sim/)
 [![Rust 1.67+](https://img.shields.io/badge/rust-1.67+-lightgray.svg)](
 https://www.rust-lang.org)
