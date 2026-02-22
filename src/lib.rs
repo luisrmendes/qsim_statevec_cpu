@@ -270,10 +270,9 @@ impl QubitLayer {
     ///
     /// # Errors
     /// Returns error if operation target qubit is out of range or if noise probabilities are outside `[0.0, 1.0]`.
-    #[must_use]
     pub fn execute_noisy_shots(
         &mut self,
-        quantum_instructions: Vec<(QuantumOp, TargetQubit)>,
+        quantum_instructions: &[(QuantumOp, TargetQubit)],
         shots: u32,
         noise_model: NoiseModel,
     ) -> Result<(), String> {
@@ -445,8 +444,9 @@ impl QubitLayer {
         }
     }
 
+    /// Scales the amplitudes of the `QubitLayer` by a factor of `scale`.
     fn scale_amplitudes(&mut self, scale: u32) {
-        let scale = scale as f64;
+        let scale = f64::from(scale);
         for amplitude in &mut self.main {
             *amplitude /= scale;
         }

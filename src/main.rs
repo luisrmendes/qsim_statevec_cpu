@@ -8,7 +8,7 @@ fn main() {
     let file_contents = match fs::read_to_string(file_path) {
         Ok(contents) => contents,
         Err(error) => {
-            eprintln!("Failed to read QASM file '{}': {error}", file_path);
+            eprintln!("Failed to read QASM file '{file_path}': {error}");
             return;
         }
     };
@@ -16,7 +16,7 @@ fn main() {
     let parsed = match openq3_parser::parse(&file_contents) {
         Ok(parsed) => parsed,
         Err(error) => {
-            eprintln!("Failed to parse QASM file '{}': {error}", file_path);
+            eprintln!("Failed to parse QASM file '{file_path}': {error}");
             return;
         }
     };
@@ -27,7 +27,7 @@ fn main() {
     };
 
     let mut noisy_layer = QubitLayer::new(parsed.num_qubits);
-    let result = noisy_layer.execute_noisy_shots(parsed.ops, shots, noise_model);
+    let result = noisy_layer.execute_noisy_shots(&parsed.ops, shots, noise_model);
     if let Err(error) = result {
         eprintln!("Failed to execute parsed instructions with noise: {error}");
         return;
