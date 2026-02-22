@@ -18,7 +18,7 @@
 //!     (QuantumOp::Hadamard, 3),
 //! ];
 //!
-//! if let Err(e) = q_layer.execute(instructions) {
+//! if let Err(e) = q_layer.execute_noiseless(instructions) {
 //!     panic!("Failed to execute instructions! Error: {e}");
 //! }
 //!
@@ -143,6 +143,7 @@ impl<'de> Deserialize<'de> for QuantumOp {
     }
 }
 
+pub type QGates = Vec<(QuantumOp, TargetQubit)>;
 pub type TargetQubit = u32;
 pub type MeasuredQubits = Vec<f64>;
 
@@ -161,12 +162,13 @@ impl NoiseModel {
 /// Quantum Assembly parser.
 /// Supports a simple subset of `OpenQASM` 3.0 (<https://openqasm.com/versions/3.0/index.html>)
 pub mod openq3_parser {
+    use crate::QGates;
     use crate::QuantumOp;
     use crate::TargetQubit;
 
     pub struct ParsedInstruct {
         pub num_qubits: u32,
-        pub ops: Vec<(QuantumOp, TargetQubit)>,
+        pub ops: QGates,
     }
 
     /// Parses the contents of a qasm file
@@ -250,104 +252,6 @@ pub mod openq3_parser {
     }
 }
 
-/// Executes multiple quantum assembly instructions with a specified number of shots.
-///
-/// # Examples
-/// ```
-/// use qsim_statevec_cpu::{execute_shots, QuantumOp};
-///
-/// let instructions = vec![(QuantumOp::PauliX, 0), (QuantumOp::PauliX, 1)];
-/// assert!(execute_shots(instructions, 2, 3).is_ok());
-/// ```
-///
-/// # Errors
-/// If operation target qubit is out of range.
-#[must_use]
-pub fn execute_shots(
-    quantum_instructions: Vec<(QuantumOp, TargetQubit)>,
-    num_qubits: u32,
-    shots: u32,
-) -> Result<QubitLayer, String> {
-    let mut accumulated_qubit_layer = QubitLayer::new(num_qubits);
-    for _ in 0..shots {
-        let mut qubit_layer = QubitLayer::new(num_qubits);
-        qubit_layer.execute(quantum_instructions.to_owned())?;
-        accumulated_qubit_layer += &qubit_layer;
-    }
-
-    if shots > 0 {
-        accumulated_qubit_layer.scale_amplitudes(shots);
-    }
-
-    Ok(accumulated_qubit_layer)
-}
-
-/// Executes multiple shots with stochastic noise.
-///
-/// - `gate_error_prob`: after each gate, applies a random Pauli error (`X`, `Y`, or `Z`) on the same target qubit.
-/// - `readout_flip_prob`: before measurement, applies a stochastic bit-flip (`X`) per qubit.
-///
-/// Returns the accumulated noisy layer averaged by the number of shots.
-///
-/// # Errors
-/// Returns error if operation target qubit is out of range or if noise probabilities are outside `[0.0, 1.0]`.
-#[must_use]
-pub fn execute_shots_noisy(
-    quantum_instructions: Vec<(QuantumOp, TargetQubit)>,
-    num_qubits: u32,
-    shots: u32,
-    noise_model: NoiseModel,
-) -> Result<QubitLayer, String> {
-    if !noise_model.is_valid() {
-        return Err("Noise probabilities must be in the range [0.0, 1.0]".to_owned());
-    }
-
-    let mut rng = rand::thread_rng();
-    let mut accumulated_qubit_layer = QubitLayer::new(num_qubits);
-
-    for _ in 0..shots {
-        let mut qubit_layer = QubitLayer::new(num_qubits);
-
-        for (op, target_qubit) in quantum_instructions.iter().cloned() {
-            if target_qubit >= qubit_layer.get_num_qubits() {
-                return Err(format!(
-                    "Target qubit {target_qubit:?} is out of range. Size of layer is {}",
-                    qubit_layer.get_num_qubits()
-                ));
-            }
-
-            match op {
-                QuantumOp::PauliX => qubit_layer.pauli_x(target_qubit),
-                QuantumOp::PauliY => qubit_layer.pauli_y(target_qubit),
-                QuantumOp::PauliZ => qubit_layer.pauli_z(target_qubit),
-                QuantumOp::Hadamard => qubit_layer.hadamard(target_qubit),
-            }
-
-            if rng.gen::<f64>() < noise_model.gate_error_prob {
-                match rng.gen_range(0..3) {
-                    0 => qubit_layer.pauli_x(target_qubit),
-                    1 => qubit_layer.pauli_y(target_qubit),
-                    _ => qubit_layer.pauli_z(target_qubit),
-                }
-            }
-        }
-
-        for qubit in 0..num_qubits {
-            if rng.gen::<f64>() < noise_model.readout_flip_prob {
-                qubit_layer.pauli_x(qubit);
-            }
-        }
-
-        accumulated_qubit_layer += &qubit_layer;
-    }
-
-    if shots > 0 {
-        accumulated_qubit_layer.scale_amplitudes(shots);
-    }
-
-    Ok(accumulated_qubit_layer)
-}
-
 /// The main abstraction of quantum circuit simulation.
 /// Contains the complex values of each possible state.
 #[derive(Clone, PartialEq)]
@@ -357,6 +261,74 @@ pub struct QubitLayer {
 }
 
 impl QubitLayer {
+    /// Executes multiple shots with stochastic noise.
+    ///
+    /// - `gate_error_prob`: after each gate, applies a random Pauli error (`X`, `Y`, or `Z`) on the same target qubit.
+    /// - `readout_flip_prob`: before measurement, applies a stochastic bit-flip (`X`) per qubit.
+    ///
+    /// Returns the accumulated noisy layer averaged by the number of shots.
+    ///
+    /// # Errors
+    /// Returns error if operation target qubit is out of range or if noise probabilities are outside `[0.0, 1.0]`.
+    #[must_use]
+    pub fn execute_noisy_shots(
+        &mut self,
+        quantum_instructions: Vec<(QuantumOp, TargetQubit)>,
+        num_qubits: u32,
+        shots: u32,
+        noise_model: NoiseModel,
+    ) -> Result<(), String> {
+        if !noise_model.is_valid() {
+            return Err("Noise probabilities must be in the range [0.0, 1.0]".to_owned());
+        }
+
+        let mut rng = rand::thread_rng();
+        let mut accumulated_qubit_layer = QubitLayer::new(num_qubits);
+
+        for _ in 0..shots {
+            let mut qubit_layer = QubitLayer::new(num_qubits);
+
+            for (op, target_qubit) in quantum_instructions.iter().cloned() {
+                if target_qubit >= qubit_layer.get_num_qubits() {
+                    return Err(format!(
+                        "Target qubit {target_qubit:?} is out of range. Size of layer is {}",
+                        qubit_layer.get_num_qubits()
+                    ));
+                }
+
+                match op {
+                    QuantumOp::PauliX => qubit_layer.pauli_x(target_qubit),
+                    QuantumOp::PauliY => qubit_layer.pauli_y(target_qubit),
+                    QuantumOp::PauliZ => qubit_layer.pauli_z(target_qubit),
+                    QuantumOp::Hadamard => qubit_layer.hadamard(target_qubit),
+                }
+
+                if rng.gen::<f64>() < noise_model.gate_error_prob {
+                    match rng.gen_range(0..3) {
+                        0 => qubit_layer.pauli_x(target_qubit),
+                        1 => qubit_layer.pauli_y(target_qubit),
+                        _ => qubit_layer.pauli_z(target_qubit),
+                    }
+                }
+            }
+
+            for qubit in 0..num_qubits {
+                if rng.gen::<f64>() < noise_model.readout_flip_prob {
+                    qubit_layer.pauli_x(qubit);
+                }
+            }
+
+            accumulated_qubit_layer += &qubit_layer;
+        }
+
+        if shots > 0 {
+            accumulated_qubit_layer.scale_amplitudes(shots);
+        }
+
+        self.main = accumulated_qubit_layer.main;
+        Ok(())
+    }
+
     /// Executes multiple quantum assembly instructions.
     /// Receives a vector containing pairs of (`QuantumOp`, `TargetQubit`).
     ///
@@ -366,7 +338,7 @@ impl QubitLayer {
     ///
     /// let mut q_layer = QubitLayer::new(2);
     /// let instructions = vec![(QuantumOp::PauliX, 0), (QuantumOp::PauliX, 1)];
-    /// q_layer.execute(instructions);
+    /// q_layer.execute_noiseless(instructions);
     ///
     /// // qubits 0 and 1 must be 1.0
     /// assert_eq!(q_layer.measure_qubits()[0], 1.0);
@@ -375,7 +347,7 @@ impl QubitLayer {
     ///
     /// # Errors
     /// If operation target qubit is out of range.
-    pub fn execute(
+    pub fn execute_noiseless(
         &mut self,
         quantum_instructions: Vec<(QuantumOp, TargetQubit)>,
     ) -> Result<(), String> {
@@ -425,7 +397,7 @@ impl QubitLayer {
     /// use qsim_statevec_cpu::{QubitLayer, QuantumOp};
     ///
     /// let mut q_layer = QubitLayer::new(20);
-    /// q_layer.execute(vec![(QuantumOp::Hadamard, 0)]);
+    /// q_layer.execute_noiseless(vec![(QuantumOp::Hadamard, 0)]);
     /// println!("{:?}", q_layer.measure_qubits());
     ///
     /// ```

@@ -1,4 +1,4 @@
-use qsim_statevec_cpu::{openq3_parser, execute_shots, execute_shots_noisy, NoiseModel};
+use qsim_statevec_cpu::{openq3_parser, NoiseModel, QubitLayer};
 use std::fs;
 
 fn main() {
@@ -21,27 +21,19 @@ fn main() {
         }
     };
 
-    let layer = match execute_shots(parsed.ops.clone(), parsed.num_qubits, shots) {
-        Ok(layer) => layer,
-        Err(error) => {
-            eprintln!("Failed to execute parsed instructions: {error}");
-            return;
-        }
-    };
-    println!("Average measured qubits: {:#?}", layer.measure_qubits());
-
     let noise_model = NoiseModel {
         gate_error_prob: 0.02,
         readout_flip_prob: 0.01,
     };
 
-    let noisy_layer = match execute_shots_noisy(parsed.ops, parsed.num_qubits, shots, noise_model)
-    {
-        Ok(layer) => layer,
-        Err(error) => {
-            eprintln!("Failed to execute parsed instructions with noise: {error}");
-            return;
-        }
-    };
-    println!("Average noisy measured qubits: {:#?}", noisy_layer.measure_qubits());
+    let mut noisy_layer = QubitLayer::new(parsed.num_qubits);
+    let result = noisy_layer.execute_noisy_shots(parsed.ops, parsed.num_qubits, shots, noise_model);
+    if let Err(error) = result {
+        eprintln!("Failed to execute parsed instructions with noise: {error}");
+        return;
+    }
+    println!(
+        "Average noisy measured qubits: {:#?}",
+        noisy_layer.measure_qubits()
+    );
 }

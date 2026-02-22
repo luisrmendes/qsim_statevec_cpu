@@ -68,10 +68,15 @@ fn test_add_qubit_layers_size_mismatch_panics() {
 fn test_execute_shots() {
     let instructions = vec![(QuantumOp::Hadamard, 0), (QuantumOp::PauliX, 1)];
 
-    let result = execute_shots(instructions, 3, 4);
-    assert!(result.is_ok());
+    let mut accumulated_layer = QubitLayer::new(3);
+    for _ in 0..4 {
+        let mut shot_layer = QubitLayer::new(3);
+        let result = shot_layer.execute_noiseless(instructions.clone());
+        assert!(result.is_ok());
+        accumulated_layer += &shot_layer;
+    }
+    accumulated_layer.scale_amplitudes(4);
 
-    let accumulated_layer = result.unwrap_or_else(|_| QubitLayer::new(3));
     let measured = accumulated_layer.measure_qubits();
     assert_eq!(0.5, (measured[0] * 10.0).round() / 10.0);
     assert_eq!(1.0, (measured[1] * 10.0).round() / 10.0);
@@ -80,32 +85,43 @@ fn test_execute_shots() {
 
 #[test]
 fn test_execute_shots_zero() {
+    let mut q_layer = QubitLayer::new(3);
     let instructions = vec![(QuantumOp::Hadamard, 0)];
+    let noise = NoiseModel {
+        gate_error_prob: 0.0,
+        readout_flip_prob: 0.0,
+    };
 
-    let result = execute_shots(instructions, 3, 0);
+    let result = q_layer.execute_noisy_shots(instructions, 3, 0, noise);
     assert!(result.is_ok());
+
+    let measured = q_layer.measure_qubits();
+    assert_eq!(0.0, measured[0]);
+    assert_eq!(0.0, measured[1]);
+    assert_eq!(0.0, measured[2]);
 }
 
 #[test]
 fn test_execute_shots_failed_execute() {
+    let mut q_layer = QubitLayer::new(3);
     let instructions = vec![(QuantumOp::PauliX, 10)];
 
-    let result = execute_shots(instructions, 3, 2);
+    let result = q_layer.execute_noiseless(instructions);
     assert!(result.is_err());
 }
 
 #[test]
-fn test_execute_shots_noisy_zero_noise() {
+fn test_execute_noisy_shots_zero_noise() {
     let instructions = vec![(QuantumOp::Hadamard, 0), (QuantumOp::PauliX, 1)];
     let noise = NoiseModel {
         gate_error_prob: 0.0,
         readout_flip_prob: 0.0,
     };
 
-    let result = execute_shots_noisy(instructions, 3, 3, noise);
+    let mut accumulated_layer = QubitLayer::new(3);
+    let result = accumulated_layer.execute_noisy_shots(instructions, 3, 3, noise);
     assert!(result.is_ok());
 
-    let accumulated_layer = result.unwrap_or_else(|_| QubitLayer::new(3));
     let measured = accumulated_layer.measure_qubits();
     assert_eq!(0.5, (measured[0] * 10.0).round() / 10.0);
     assert_eq!(1.0, (measured[1] * 10.0).round() / 10.0);
@@ -113,17 +129,17 @@ fn test_execute_shots_noisy_zero_noise() {
 }
 
 #[test]
-fn test_execute_shots_noisy_readout_flip_full() {
+fn test_execute_noisy_shots_readout_flip_full() {
     let instructions = vec![];
     let noise = NoiseModel {
         gate_error_prob: 0.0,
         readout_flip_prob: 1.0,
     };
 
-    let result = execute_shots_noisy(instructions, 3, 2, noise);
+    let mut accumulated_layer = QubitLayer::new(3);
+    let result = accumulated_layer.execute_noisy_shots(instructions, 3, 2, noise);
     assert!(result.is_ok());
 
-    let accumulated_layer = result.unwrap_or_else(|_| QubitLayer::new(3));
     let measured = accumulated_layer.measure_qubits();
     assert_eq!(1.0, measured[0]);
     assert_eq!(1.0, measured[1]);
@@ -131,14 +147,15 @@ fn test_execute_shots_noisy_readout_flip_full() {
 }
 
 #[test]
-fn test_execute_shots_noisy_invalid_noise() {
+fn test_execute_noisy_shots_invalid_noise() {
+    let mut q_layer = QubitLayer::new(1);
     let instructions = vec![(QuantumOp::PauliX, 0)];
     let noise = NoiseModel {
         gate_error_prob: 1.1,
         readout_flip_prob: 0.0,
     };
 
-    let result = execute_shots_noisy(instructions, 1, 1, noise);
+    let result = q_layer.execute_noisy_shots(instructions, 1, 1, noise);
     assert!(result.is_err());
 }
 
@@ -153,7 +170,7 @@ fn test_random_executions() {
         (QuantumOp::Hadamard, 1),
         (QuantumOp::Hadamard, 2),
     ];
-    let _ = q_layer.execute(instructions);
+    let _ = q_layer.execute_noiseless(instructions);
     for it in 0..q_layer.get_num_qubits() {
         assert_eq!(
             0.0,
@@ -169,7 +186,7 @@ fn test_measure_qubits() {
         assert_eq!(0.0, q_layer.measure_qubits()[it as usize]);
     }
 
-    let _ = q_layer.execute(vec![]);
+    let _ = q_layer.execute_noiseless(vec![]);
 
     for it in 0..q_layer.get_num_qubits() {
         assert_eq!(0.0, q_layer.measure_qubits()[it as usize]);
@@ -187,7 +204,7 @@ fn test_spins_on_superposition() {
         (QuantumOp::PauliY, 1),
         (QuantumOp::PauliZ, 2),
     ];
-    let _ = q_layer.execute(instructions);
+    let _ = q_layer.execute_noiseless(instructions);
     for it in 0..q_layer.get_num_qubits() {
         assert_eq!(
             0.5,
@@ -201,10 +218,10 @@ fn test_failed_execute() {
     let mut q_layer: QubitLayer = QubitLayer::new(10);
     let instructions = vec![(QuantumOp::PauliX, 10)]; // index goes up to 9
 
-    let result: Result<(), String> = q_layer.execute(instructions);
+    let result: Result<(), String> = q_layer.execute_noiseless(instructions);
     assert!(result.is_err());
 
-    let result: Result<(), String> = q_layer.execute(vec![(QuantumOp::Hadamard, 2112)]);
+    let result: Result<(), String> = q_layer.execute_noiseless(vec![(QuantumOp::Hadamard, 2112)]);
     assert!(result.is_err());
 }
 
@@ -217,7 +234,7 @@ fn test_execute() {
         (QuantumOp::PauliZ, 2),
     ];
 
-    if let Err(e) = q_layer.execute(instructions) {
+    if let Err(e) = q_layer.execute_noiseless(instructions) {
         panic!("Should not panic!. Error: {e}");
     }
 
