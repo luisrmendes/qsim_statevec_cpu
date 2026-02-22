@@ -303,6 +303,15 @@ fn test_get_num_qubits() {
 }
 
 #[test]
+fn test_get_mem_usage() {
+    let num_qubits = 20;
+    let q_layer: QubitLayer = QubitLayer::new(num_qubits);
+
+    let expected = (8_u64 * 2_u64) * (2_u64.pow(num_qubits));
+    assert_eq!(expected, q_layer.get_mem_usage());
+}
+
+#[test]
 fn test_display_trait_print() {
     let q_layer: QubitLayer = QubitLayer::new(2);
     let expected = "1+0i 0+0i 0+0i 0+0i";

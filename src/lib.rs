@@ -2,7 +2,7 @@
 //!
 //! Provides an abstraction for quantum circuit simulations.
 //! Uses the state vector simulation method.
-//! Memory consumption is 2 * 8 * 2<sup>`num_qubits`</sup> bytes. For example, simulating 25 qubits cost ~537 MB.
+//! Memory consumption is 8 * 2 * 2<sup>`num_qubits`</sup> bytes. For example, simulating 25 qubits costs ~537 MB.
 //!
 //! # Example
 //!
@@ -374,6 +374,12 @@ impl QubitLayer {
             }
         }
         Ok(())
+    }
+
+    /// Returns the estimated memory usage in bytes (`8 * 2 * 2^num_qubits`).
+    #[must_use]
+    pub fn get_mem_usage(&self) -> u64 {
+        (8_u64 * 2_u64) * (2_u64.pow(self.num_qubits))
     }
 
     /// Returns the number of qubits represented in the `QubitLayer`.  
