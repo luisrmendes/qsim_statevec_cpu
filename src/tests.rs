@@ -92,7 +92,7 @@ fn test_execute_shots_zero() {
         readout_flip_prob: 0.0,
     };
 
-    let result = q_layer.execute_noisy_shots(instructions, 3, 0, noise);
+    let result = q_layer.execute_noisy_shots(instructions, 0, noise);
     assert!(result.is_ok());
 
     let measured = q_layer.measure_qubits();
@@ -119,7 +119,7 @@ fn test_execute_noisy_shots_zero_noise() {
     };
 
     let mut accumulated_layer = QubitLayer::new(3);
-    let result = accumulated_layer.execute_noisy_shots(instructions, 3, 3, noise);
+    let result = accumulated_layer.execute_noisy_shots(instructions, 3, noise);
     assert!(result.is_ok());
 
     let measured = accumulated_layer.measure_qubits();
@@ -137,7 +137,7 @@ fn test_execute_noisy_shots_readout_flip_full() {
     };
 
     let mut accumulated_layer = QubitLayer::new(3);
-    let result = accumulated_layer.execute_noisy_shots(instructions, 3, 2, noise);
+    let result = accumulated_layer.execute_noisy_shots(instructions, 2, noise);
     assert!(result.is_ok());
 
     let measured = accumulated_layer.measure_qubits();
@@ -155,7 +155,7 @@ fn test_execute_noisy_shots_invalid_noise() {
         readout_flip_prob: 0.0,
     };
 
-    let result = q_layer.execute_noisy_shots(instructions, 1, 1, noise);
+    let result = q_layer.execute_noisy_shots(instructions, 1, noise);
     assert!(result.is_err());
 }
 

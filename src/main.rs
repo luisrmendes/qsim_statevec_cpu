@@ -27,7 +27,7 @@ fn main() {
     };
 
     let mut noisy_layer = QubitLayer::new(parsed.num_qubits);
-    let result = noisy_layer.execute_noisy_shots(parsed.ops, parsed.num_qubits, shots, noise_model);
+    let result = noisy_layer.execute_noisy_shots(parsed.ops, shots, noise_model);
     if let Err(error) = result {
         eprintln!("Failed to execute parsed instructions with noise: {error}");
         return;

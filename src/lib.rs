@@ -258,6 +258,7 @@ pub mod openq3_parser {
 pub struct QubitLayer {
     main: Vec<Complex<f64>>,
     parity: Vec<Complex<f64>>,
+    num_qubits: u32,
 }
 
 impl QubitLayer {
@@ -274,7 +275,6 @@ impl QubitLayer {
     pub fn execute_noisy_shots(
         &mut self,
         quantum_instructions: Vec<(QuantumOp, TargetQubit)>,
-        num_qubits: u32,
         shots: u32,
         noise_model: NoiseModel,
     ) -> Result<(), String> {
@@ -283,10 +283,10 @@ impl QubitLayer {
         }
 
         let mut rng = rand::thread_rng();
-        let mut accumulated_qubit_layer = QubitLayer::new(num_qubits);
+        let mut accumulated_qubit_layer = QubitLayer::new(self.get_num_qubits());
 
         for _ in 0..shots {
-            let mut qubit_layer = QubitLayer::new(num_qubits);
+            let mut qubit_layer = QubitLayer::new(self.get_num_qubits());
 
             for (op, target_qubit) in quantum_instructions.iter().cloned() {
                 if target_qubit >= qubit_layer.get_num_qubits() {
@@ -312,7 +312,7 @@ impl QubitLayer {
                 }
             }
 
-            for qubit in 0..num_qubits {
+            for qubit in 0..self.get_num_qubits() {
                 if rng.gen::<f64>() < noise_model.readout_flip_prob {
                     qubit_layer.pauli_x(qubit);
                 }
@@ -387,7 +387,7 @@ impl QubitLayer {
     /// ```
     #[must_use]
     pub fn get_num_qubits(&self) -> u32 {
-        self.main.len().ilog2()
+        self.num_qubits
     }
 
     /// Returns the results of the operations performed in the `QubitLayer`.
@@ -436,6 +436,7 @@ impl QubitLayer {
         Self {
             main,
             parity: vec![Complex::new(0.0, 0.0); 2_usize.pow(num_qubits)],
+            num_qubits,
         }
     }
 
@@ -561,8 +562,8 @@ impl Add for QubitLayer {
 
     fn add(self, rhs: Self) -> Self::Output {
         assert_eq!(
-            self.main.len(),
-            rhs.main.len(),
+            self.get_num_qubits(),
+            rhs.get_num_qubits(),
             "Cannot add QubitLayers with different numbers of qubits"
         );
 
@@ -580,7 +581,11 @@ impl Add for QubitLayer {
             .map(|(lhs, rhs)| lhs + rhs)
             .collect();
 
-        Self { main, parity }
+        Self {
+            main,
+            parity,
+            num_qubits: self.num_qubits,
+        }
     }
 }
 
@@ -608,7 +613,11 @@ impl Add<&QubitLayer> for &QubitLayer {
             .map(|(lhs, rhs)| *lhs + *rhs)
             .collect();
 
-        QubitLayer { main, parity }
+        QubitLayer {
+            main,
+            parity,
+            num_qubits: self.num_qubits,
+        }
     }
 }
 
