@@ -158,9 +158,9 @@ impl NoiseModel {
     }
 }
 
-/// Quantum Assembly parser module.
+/// Quantum Assembly parser.
 /// Supports a simple subset of `OpenQASM` 3.0 (<https://openqasm.com/versions/3.0/index.html>)
-pub mod qasm_parser {
+pub mod openq3_parser {
     use crate::QuantumOp;
     use crate::TargetQubit;
 

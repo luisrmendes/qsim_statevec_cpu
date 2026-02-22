@@ -1,0 +1,8 @@
+# testing
+    # my;:
+  # parsing:_:
+ # capabilities
+
+             qreg q[1];
+
+     h q[0];

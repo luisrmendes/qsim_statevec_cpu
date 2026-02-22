@@ -1,0 +1,19 @@
+# Results: 
+#   Qubit 1 -> 50%
+#   Qubit 2 -> 100%
+#   Qubit 3 -> 0%
+#   Qubit 4 -> 0%
+
+qreg q[4];
+
+z q[0];
+x q[1];
+h q[2];
+y q[3];
+h q[2];
+y q[1];
+z q[0];
+h q[0];
+x q[1];
+z q[2];
+y q[3];
