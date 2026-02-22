@@ -1,4 +1,58 @@
 use super::*;
+use std::fs;
+
+#[test]
+fn test_openq3_parser_parse_valid() {
+    let qasm = "qreg q[3];\nx q[0];\ny q[1];\nz q[2];\nh q[0];";
+
+    let parsed = openq3_parser::parse(qasm).expect("parser should parse valid qasm");
+
+    assert_eq!(3, parsed.num_qubits);
+    assert_eq!(4, parsed.ops.len());
+    assert_eq!((QuantumOp::PauliX, 0), parsed.ops[0]);
+    assert_eq!((QuantumOp::PauliY, 1), parsed.ops[1]);
+    assert_eq!((QuantumOp::PauliZ, 2), parsed.ops[2]);
+    assert_eq!((QuantumOp::Hadamard, 0), parsed.ops[3]);
+}
+
+#[test]
+fn test_openq3_parser_parse_grovers_file() {
+    let qasm = fs::read_to_string("qasm_files/Grovers_5_qubits.openqasm")
+        .expect("should read Grovers_5_qubits.openqasm");
+
+    let parsed = openq3_parser::parse(&qasm).expect("parser should parse Grover qasm");
+
+    assert!(parsed.num_qubits == 5);
+    assert!(!parsed.ops.is_empty());
+    assert_eq!((QuantumOp::Hadamard, 0), parsed.ops[0]);
+}
+
+#[test]
+fn test_openq3_parser_skips_unknown_op() {
+    let qasm = "qreg q[2];\nfoo q[1];\nx q[0];";
+
+    let parsed = openq3_parser::parse(qasm).expect("parser should skip unknown op");
+
+    assert_eq!(2, parsed.num_qubits);
+    assert_eq!(1, parsed.ops.len());
+    assert_eq!((QuantumOp::PauliX, 0), parsed.ops[0]);
+}
+
+#[test]
+fn test_openq3_parser_invalid_num_qubits() {
+    let qasm = "qreg q[];\nx q[0];";
+
+    let parsed = openq3_parser::parse(qasm);
+    assert!(parsed.is_err());
+}
+
+#[test]
+fn test_openq3_parser_invalid_target_qubit() {
+    let qasm = "qreg q[2];\nx q[a];";
+
+    let parsed = openq3_parser::parse(qasm);
+    assert!(parsed.is_err());
+}
 
 #[test]
 fn test_add_qubit_layers_owned() {

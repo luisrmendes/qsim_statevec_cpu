@@ -182,17 +182,16 @@ pub mod openq3_parser {
             .map(std::borrow::ToOwned::to_owned)
             .collect();
 
-        // remove all lines until qreg
-        let mut remove_delim = 0;
-        for line in &lines {
-            if line.contains("qreg") {
-                break;
-            }
-            remove_delim += 1;
-        }
+        // find qreg declaration line
+        let Some(remove_delim) = lines.iter().position(|line| line.contains("qreg")) else {
+            return Err("Failed to parse the number of qubits!".to_owned());
+        };
 
         // Parse the number of qubits
-        let num_qubits: String = lines[0].chars().filter(|&c| c.is_numeric()).collect();
+        let num_qubits: String = lines[remove_delim]
+            .chars()
+            .filter(|&c| c.is_numeric())
+            .collect();
         let Ok(num_qubits) = num_qubits.parse::<u32>() else {
             return Err("Failed to parse the number of qubits!".to_owned());
         };
