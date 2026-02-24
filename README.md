@@ -10,7 +10,7 @@ https://www.rust-lang.org)
 
 This provides a quantum simulation abstraction tool to simulate quantum circuits.  
 Uses the state vector simulation method.  
-Memory consumption is 8 * 2 * 2<sup>`num_qubits`</sup> bytes. For example, simulating 25 qubits costs ~537 MB.  
+Memory consumption is 8 *2* 2<sup>`num_qubits`</sup> bytes. For example, simulating 25 qubits costs ~537 MB.  
 
 The following gate operations are implemented:
 
@@ -18,3 +18,21 @@ The following gate operations are implemented:
 - Pauli Y gate
 - Pauli Z gate
 - Hadamard gate
+- T gate
+- S gate
+
+## Dev Notes
+
+### Git hooks
+
+This repository includes a pre-commit hook in `.githooks/pre-commit` that runs:
+
+- `cargo check`
+- `cargo test -q`
+
+To enable it:
+
+```bash
+git config core.hooksPath .githooks
+chmod +x .githooks/pre-commit
+```
