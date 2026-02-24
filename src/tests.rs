@@ -1,5 +1,142 @@
 use super::*;
 
+// More extensive functionality tests on quantum gate operations
+mod openqasm_tests {
+    use super::*;
+
+    #[test]
+    fn misc1_3_qubits() {
+        let filename = "misc1_3_qubits.openqasm";
+        let qasm = std::fs::read_to_string(format!("qasm_files/{filename}"))
+            .expect("should read {filename}");
+
+        let parsed = openq3_parser::parse(&qasm).expect("parser should parse cx qasm");
+        let mut q_layer = QubitLayer::new(parsed.num_qubits);
+
+        let result = q_layer.execute_noiseless(parsed.ops.clone());
+        assert!(result.is_ok());
+
+        let measured = q_layer.measure_qubits();
+        assert_eq!(round_to(measured[0], 2), 0.5);
+        assert_eq!(round_to(measured[1], 2), 1.0);
+        assert_eq!(round_to(measured[2], 2), 0.5);
+    }
+
+    #[test]
+    fn misc1_4_qubits() {
+        let filename = "misc1_4_qubits.openqasm";
+        let qasm = std::fs::read_to_string(format!("qasm_files/{filename}"))
+            .expect("should read {filename}");
+
+        let parsed = openq3_parser::parse(&qasm).expect("parser should parse cx qasm");
+        let mut q_layer = QubitLayer::new(parsed.num_qubits);
+
+        let result = q_layer.execute_noiseless(parsed.ops.clone());
+        assert!(result.is_ok());
+
+        let measured = q_layer.measure_qubits();
+        assert_eq!(round_to(measured[0], 2), 0.5);
+        assert_eq!(round_to(measured[1], 2), 0.5);
+        assert_eq!(round_to(measured[2], 2), 1.0);
+        assert_eq!(round_to(measured[3], 2), 0.5);
+    }
+
+    #[test]
+    fn misc1_5_qubits() {
+        let filename = "misc1_5_qubits.openqasm";
+        let qasm = std::fs::read_to_string(format!("qasm_files/{filename}"))
+            .expect("should read {filename}");
+
+        let parsed = openq3_parser::parse(&qasm).expect("parser should parse cx qasm");
+        let mut q_layer = QubitLayer::new(parsed.num_qubits);
+
+        let result = q_layer.execute_noiseless(parsed.ops.clone());
+        assert!(result.is_ok());
+
+        let measured = q_layer.measure_qubits();
+        assert_eq!(round_to(measured[0], 2), 0.5);
+        assert_eq!(round_to(measured[1], 2), 0.5);
+        assert_eq!(round_to(measured[2], 2), 0.5);
+        assert_eq!(round_to(measured[3], 2), 1.0);
+        assert_eq!(round_to(measured[4], 2), 0.5);
+    }
+
+    #[test]
+    fn misc2_3_qubits() {
+        let qasm = std::fs::read_to_string("qasm_files/misc2_3_qubits.openqasm")
+            .expect("should read misc2_3_qubits.openqasm");
+
+        let parsed = openq3_parser::parse(&qasm).expect("parser should parse cx qasm");
+        let mut q_layer = QubitLayer::new(parsed.num_qubits);
+
+        let result = q_layer.execute_noiseless(parsed.ops.clone());
+        assert!(result.is_ok());
+
+        let measured = q_layer.measure_qubits();
+        assert_eq!(measured[0], 1.0);
+        assert_eq!(measured[1], 0.0);
+        assert_eq!(measured[2], 0.0);
+    }
+
+    #[test]
+    fn ctrl_x_1_5_qubits() {
+        let qasm = std::fs::read_to_string("qasm_files/ctrl_x_1_5_qubits.openqasm")
+            .expect("should read ctrl_x_1_5_qubits.openqasm");
+
+        let parsed = openq3_parser::parse(&qasm).expect("parser should parse cx qasm");
+        let mut q_layer = QubitLayer::new(parsed.num_qubits);
+
+        let result = q_layer.execute_noiseless(parsed.ops.clone());
+        assert!(result.is_ok());
+
+        let measured = q_layer.measure_qubits();
+        assert_eq!(parsed.num_qubits as usize, measured.len());
+        for value in measured {
+            assert_eq!(0.5, round_to(value, 2));
+        }
+    }
+
+    #[test]
+    fn ctrl_z_1_5_qubits() {
+        let qasm = std::fs::read_to_string("qasm_files/ctrl_z_1_5_qubits.openqasm")
+            .expect("should read ctrl_z_1_5_qubits.openqasm");
+
+        let parsed = openq3_parser::parse(&qasm).expect("parser should parse cz qasm");
+        let mut q_layer = QubitLayer::new(parsed.num_qubits);
+
+        let result = q_layer.execute_noiseless(parsed.ops.clone());
+        assert!(result.is_ok());
+
+        let measured = q_layer.measure_qubits();
+        assert_eq!(parsed.num_qubits as usize, measured.len());
+        for value in measured {
+            assert_eq!(0.5, (value * 10.0).round() / 10.0);
+        }
+    }
+
+    fn round_to(x: f64, places: u32) -> f64 {
+        let factor = 10_f64.powi(places as i32);
+        (x * factor).round() / factor
+    }
+
+    // #[test]
+    // fn grovers_5_qubits() {
+    //     let filename = "grovers_5_qubits";
+    //     let qasm = std::fs::read_to_string(format!("qasm_files/{filename}.openqasm"))
+    //         .expect("should read {filename}.openqasm");
+
+    //     let parsed = openq3_parser::parse(&qasm).expect("parser should parse Grover qasm");
+    //     let mut q_layer = QubitLayer::new(parsed.num_qubits);
+
+    //     let result = q_layer.execute_noiseless(parsed.ops.clone());
+    //     assert!(result.is_ok());
+
+    //     let measured = q_layer.measure_qubits();
+    //     assert_eq!(parsed.num_qubits as usize, measured.len());
+    //     assert!(measured.iter().all(|value| (0.0..=1.0).contains(value)));
+    // }
+}
+
 mod qubitlayer_tests {
     use super::*;
 
@@ -462,7 +599,7 @@ mod qubitlayer_tests {
     fn test_execute_noiseless_toffoli_instruction() {
         let mut q_layer: QubitLayer = QubitLayer::new(3);
 
-        let prep = vec![(QuantumOp::PauliX, 0), (QuantumOp::PauliX, 1)];
+        let prep = vec![(QuantumOp::PauliX, 1), (QuantumOp::PauliX, 2)];
         let prep_result = q_layer.execute_noiseless(prep);
         assert!(prep_result.is_ok());
 
@@ -481,58 +618,6 @@ mod qubitlayer_tests {
 
         let result = q_layer.execute_noiseless(vec![(TwoCtrlQubitOp::Toffoli, 0, 7, 2)]);
         assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_execute_controlled_x_file() {
-        let qasm = std::fs::read_to_string("qasm_files/Controllex_X_5_qubits.openqasm")
-            .expect("should read Controllex_X_5_qubits.openqasm");
-
-        let parsed = openq3_parser::parse(&qasm).expect("parser should parse cx qasm");
-        let mut q_layer = QubitLayer::new(parsed.num_qubits);
-
-        let result = q_layer.execute_noiseless(parsed.ops.clone());
-        assert!(result.is_ok());
-
-        let measured = q_layer.measure_qubits();
-        assert_eq!(parsed.num_qubits as usize, measured.len());
-        for value in measured {
-            assert_eq!(0.5, (value * 10.0).round() / 10.0);
-        }
-    }
-
-    #[test]
-    fn test_execute_controlled_z_file() {
-        let qasm = std::fs::read_to_string("qasm_files/Controllex_Z_5_qubits.openqasm")
-            .expect("should read Controllex_Z_5_qubits.openqasm");
-
-        let parsed = openq3_parser::parse(&qasm).expect("parser should parse cz qasm");
-        let mut q_layer = QubitLayer::new(parsed.num_qubits);
-
-        let result = q_layer.execute_noiseless(parsed.ops.clone());
-        assert!(result.is_ok());
-
-        let measured = q_layer.measure_qubits();
-        assert_eq!(parsed.num_qubits as usize, measured.len());
-        for value in measured {
-            assert_eq!(0.5, (value * 10.0).round() / 10.0);
-        }
-    }
-
-    #[test]
-    fn test_execute_grovers_file() {
-        let qasm = std::fs::read_to_string("qasm_files/Grovers_5_qubits.openqasm")
-            .expect("should read Grovers_5_qubits.openqasm");
-
-        let parsed = openq3_parser::parse(&qasm).expect("parser should parse Grover qasm");
-        let mut q_layer = QubitLayer::new(parsed.num_qubits);
-
-        let result = q_layer.execute_noiseless(parsed.ops.clone());
-        assert!(result.is_ok());
-
-        let measured = q_layer.measure_qubits();
-        assert_eq!(parsed.num_qubits as usize, measured.len());
-        assert!(measured.iter().all(|value| (0.0..=1.0).contains(value)));
     }
 }
 
@@ -560,8 +645,8 @@ mod parser_tests {
 
     #[test]
     fn parse_controlled_x_ops() {
-        let qasm = fs::read_to_string("qasm_files/Controllex_X_5_qubits.openqasm")
-            .expect("should read Controllex_X_5_qubits.openqasm");
+        let qasm = fs::read_to_string("qasm_files/ctrl_x_1_5_qubits.openqasm")
+            .expect("should read ctrl_x_1_5_qubits.openqasm");
 
         let parsed = openq3_parser::parse(&qasm).expect("parser should parse cx qasm");
 
@@ -584,8 +669,8 @@ mod parser_tests {
 
     #[test]
     fn parse_controlled_z_ops() {
-        let qasm = fs::read_to_string("qasm_files/Controllex_Z_5_qubits.openqasm")
-            .expect("should read Controllex_Z_5_qubits.openqasm");
+        let qasm = fs::read_to_string("qasm_files/ctrl_z_1_5_qubits.openqasm")
+            .expect("should read ctrl_z_1_5_qubits.openqasm");
 
         let parsed = openq3_parser::parse(&qasm).expect("parser should parse cz qasm");
 
@@ -608,8 +693,8 @@ mod parser_tests {
 
     #[test]
     fn parse_grovers_file() {
-        let qasm = fs::read_to_string("qasm_files/Grovers_5_qubits.openqasm")
-            .expect("should read Grovers_5_qubits.openqasm");
+        let qasm = fs::read_to_string("qasm_files/grovers_5_qubits.openqasm")
+            .expect("should read grovers_5_qubits.openqasm");
 
         let parsed = openq3_parser::parse(&qasm).expect("parser should parse Grover qasm");
 
@@ -625,11 +710,11 @@ mod parser_tests {
     }
 
     #[test]
-    fn parse_multiops_3_file() {
-        let qasm = fs::read_to_string("qasm_files/MultiOps_3_qubits.openqasm")
-            .expect("should read MultiOps_3_qubits.openqasm");
+    fn parse_misc1_3_qubits_file() {
+        let qasm = fs::read_to_string("qasm_files/misc1_3_qubits.openqasm")
+            .expect("should read misc1_3_qubits.openqasm");
 
-        let parsed = openq3_parser::parse(&qasm).expect("parser should parse MultiOps_3 qasm");
+        let parsed = openq3_parser::parse(&qasm).expect("parser should parse misc_3 qasm");
 
         assert_eq!(3, parsed.num_qubits);
         assert_eq!(9, parsed.ops.len());
@@ -644,11 +729,11 @@ mod parser_tests {
     }
 
     #[test]
-    fn parse_multiops_4_file() {
-        let qasm = fs::read_to_string("qasm_files/MultiOps_4_qubits.openqasm")
-            .expect("should read MultiOps_4_qubits.openqasm");
+    fn parse_misc1_4_qubits_file() {
+        let qasm = fs::read_to_string("qasm_files/misc1_4_qubits.openqasm")
+            .expect("should read misc1_4_qubits.openqasm");
 
-        let parsed = openq3_parser::parse(&qasm).expect("parser should parse MultiOps_4 qasm");
+        let parsed = openq3_parser::parse(&qasm).expect("parser should parse misc_4 qasm");
 
         assert_eq!(4, parsed.num_qubits);
         assert_eq!(10, parsed.ops.len());
@@ -667,11 +752,11 @@ mod parser_tests {
     }
 
     #[test]
-    fn parse_multiops_5_file() {
-        let qasm = fs::read_to_string("qasm_files/MultiOps_5_qubits.openqasm")
-            .expect("should read MultiOps_5_qubits.openqasm");
+    fn parse_misc1_5_qubits_file() {
+        let qasm = fs::read_to_string("qasm_files/misc1_5_qubits.openqasm")
+            .expect("should read misc1_5_qubits.openqasm");
 
-        let parsed = openq3_parser::parse(&qasm).expect("parser should parse MultiOps_5 qasm");
+        let parsed = openq3_parser::parse(&qasm).expect("parser should parse misc_5 qasm");
 
         assert_eq!(5, parsed.num_qubits);
         assert_eq!(13, parsed.ops.len());

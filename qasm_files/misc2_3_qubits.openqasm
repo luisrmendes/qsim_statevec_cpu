@@ -1,0 +1,11 @@
+// Multi-operation test on 5 qubits with mixed controls
+OPENQASM 3.0;
+include "stdgates.inc";
+
+qreg q[3];
+
+x q[0];
+y q[1];
+z q[2];
+cx q[1], q[0];
+cx q[0], q[2];

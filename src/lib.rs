@@ -64,8 +64,8 @@ pub enum TwoCtrlQubitOp {
 }
 
 pub type SingleQubitInstruct = (SingleQubitOp, TargetQubit);
-pub type SingleCtrlQubitInstruct = (SingleCtrlQubitOp, CtrlQubit, TargetQubit);
-pub type TwoCtrlQubitInstruct = (TwoCtrlQubitOp, CtrlQubit, CtrlQubit, TargetQubit);
+pub type SingleCtrlQubitInstruct = (SingleCtrlQubitOp, TargetQubit, CtrlQubit);
+pub type TwoCtrlQubitInstruct = (TwoCtrlQubitOp, TargetQubit, CtrlQubit, CtrlQubit);
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum QInstruct {
@@ -80,14 +80,14 @@ impl From<(QuantumOp, TargetQubit)> for QInstruct {
     }
 }
 
-impl From<(SingleCtrlQubitOp, CtrlQubit, TargetQubit)> for QInstruct {
-    fn from(value: (SingleCtrlQubitOp, CtrlQubit, TargetQubit)) -> Self {
+impl From<(SingleCtrlQubitOp, TargetQubit, CtrlQubit)> for QInstruct {
+    fn from(value: (SingleCtrlQubitOp, TargetQubit, CtrlQubit)) -> Self {
         QInstruct::SingleCtrl(value)
     }
 }
 
-impl From<(TwoCtrlQubitOp, CtrlQubit, CtrlQubit, TargetQubit)> for QInstruct {
-    fn from(value: (TwoCtrlQubitOp, CtrlQubit, CtrlQubit, TargetQubit)) -> Self {
+impl From<(TwoCtrlQubitOp, TargetQubit, CtrlQubit, CtrlQubit)> for QInstruct {
+    fn from(value: (TwoCtrlQubitOp, TargetQubit, CtrlQubit, CtrlQubit)) -> Self {
         QInstruct::TwoCtrl(value)
     }
 }
@@ -226,7 +226,7 @@ impl QubitLayer {
 
                 Ok(target_qubit)
             }
-            QInstruct::SingleCtrl((op, control_qubit, target_qubit)) => {
+            QInstruct::SingleCtrl((op, target_qubit, control_qubit)) => {
                 if target_qubit >= self.get_num_qubits() {
                     return Err(format!(
                         "Target qubit {target_qubit:?} is out of range. Size of layer is {}",
@@ -251,7 +251,7 @@ impl QubitLayer {
 
                 Ok(target_qubit)
             }
-            QInstruct::TwoCtrl((op, control_qubit1, control_qubit2, target_qubit)) => {
+            QInstruct::TwoCtrl((op, target_qubit, control_qubit1, control_qubit2)) => {
                 if target_qubit >= self.get_num_qubits() {
                     return Err(format!(
                         "Target qubit {target_qubit:?} is out of range. Size of layer is {}",
