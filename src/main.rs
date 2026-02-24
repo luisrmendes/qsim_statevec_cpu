@@ -1,4 +1,4 @@
-use qsim_statevec_cpu::{QubitLayer, QuantumOp};
+use qsim_statevec_cpu::{QuantumOp, QubitLayer};
 
 fn main() {
     // let file_path = "qasm_files/Grovers_5_qubits.openqasm";

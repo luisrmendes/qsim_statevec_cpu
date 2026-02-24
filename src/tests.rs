@@ -133,7 +133,7 @@ mod qubitlayer_tests {
 
     #[test]
     fn test_execute_noisy_shots_readout_flip_full() {
-        let instructions = vec![];
+        let instructions: Vec<(QuantumOp, TargetQubit)> = vec![];
         let noise = NoiseModel {
             gate_error_prob: 0.0,
             readout_flip_prob: 1.0,
@@ -189,7 +189,8 @@ mod qubitlayer_tests {
             assert_eq!(0.0, q_layer.measure_qubits()[it as usize]);
         }
 
-        let _ = q_layer.execute_noiseless(vec![]);
+        let instructions: Vec<(QuantumOp, TargetQubit)> = vec![];
+        let _ = q_layer.execute_noiseless(instructions);
 
         for it in 0..q_layer.get_num_qubits() {
             assert_eq!(0.0, q_layer.measure_qubits()[it as usize]);
@@ -400,30 +401,213 @@ mod qubitlayer_tests {
         ];
         assert_eq!(expected, q_layer.main);
     }
+
+    #[test]
+    fn test_controlled_x_simple() {
+        let num_qubits = 2;
+        let mut q_layer: QubitLayer = QubitLayer::new(num_qubits);
+
+        q_layer.pauli_x(1);
+        q_layer.controlled_x(1, 0);
+
+        let measured = q_layer.measure_qubits();
+        assert_eq!(1.0, measured[0]);
+        assert_eq!(1.0, measured[1]);
+    }
+
+    #[test]
+    fn test_controlled_z_simple() {
+        let num_qubits = 2;
+        let mut q_layer: QubitLayer = QubitLayer::new(num_qubits);
+
+        q_layer.pauli_x(0);
+        q_layer.pauli_x(1);
+        q_layer.controlled_z(1, 0);
+
+        let measured = q_layer.measure_qubits();
+        assert_eq!(1.0, measured[0]);
+        assert_eq!(1.0, measured[1]);
+    }
+
+    #[test]
+    fn test_toffoli_simple() {
+        let num_qubits = 3;
+        let mut q_layer: QubitLayer = QubitLayer::new(num_qubits);
+
+        q_layer.pauli_x(0);
+        q_layer.pauli_x(1);
+        q_layer.toffoli(0, 1, 2);
+
+        let measured = q_layer.measure_qubits();
+        assert_eq!(1.0, measured[0]);
+        assert_eq!(1.0, measured[1]);
+        assert_eq!(1.0, measured[2]);
+    }
+
+    #[test]
+    fn test_toffoli_no_flip_when_not_all_controls_active() {
+        let num_qubits = 3;
+        let mut q_layer: QubitLayer = QubitLayer::new(num_qubits);
+
+        q_layer.pauli_x(0);
+        q_layer.toffoli(0, 1, 2);
+
+        let measured = q_layer.measure_qubits();
+        assert_eq!(1.0, measured[0]);
+        assert_eq!(0.0, measured[1]);
+        assert_eq!(0.0, measured[2]);
+    }
+
+    #[test]
+    fn test_execute_noiseless_toffoli_instruction() {
+        let mut q_layer: QubitLayer = QubitLayer::new(3);
+
+        let prep = vec![(QuantumOp::PauliX, 0), (QuantumOp::PauliX, 1)];
+        let prep_result = q_layer.execute_noiseless(prep);
+        assert!(prep_result.is_ok());
+
+        let toffoli_result = q_layer.execute_noiseless(vec![(TwoCtrlQubitOp::Toffoli, 0, 1, 2)]);
+        assert!(toffoli_result.is_ok());
+
+        let measured = q_layer.measure_qubits();
+        assert_eq!(1.0, measured[0]);
+        assert_eq!(1.0, measured[1]);
+        assert_eq!(1.0, measured[2]);
+    }
+
+    #[test]
+    fn test_execute_noiseless_toffoli_out_of_range() {
+        let mut q_layer: QubitLayer = QubitLayer::new(3);
+
+        let result = q_layer.execute_noiseless(vec![(TwoCtrlQubitOp::Toffoli, 0, 7, 2)]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_execute_controlled_x_file() {
+        let qasm = std::fs::read_to_string("qasm_files/Controllex_X_5_qubits.openqasm")
+            .expect("should read Controllex_X_5_qubits.openqasm");
+
+        let parsed = openq3_parser::parse(&qasm).expect("parser should parse cx qasm");
+        let mut q_layer = QubitLayer::new(parsed.num_qubits);
+
+        let result = q_layer.execute_noiseless(parsed.ops.clone());
+        assert!(result.is_ok());
+
+        let measured = q_layer.measure_qubits();
+        assert_eq!(parsed.num_qubits as usize, measured.len());
+        for value in measured {
+            assert_eq!(0.5, (value * 10.0).round() / 10.0);
+        }
+    }
+
+    #[test]
+    fn test_execute_controlled_z_file() {
+        let qasm = std::fs::read_to_string("qasm_files/Controllex_Z_5_qubits.openqasm")
+            .expect("should read Controllex_Z_5_qubits.openqasm");
+
+        let parsed = openq3_parser::parse(&qasm).expect("parser should parse cz qasm");
+        let mut q_layer = QubitLayer::new(parsed.num_qubits);
+
+        let result = q_layer.execute_noiseless(parsed.ops.clone());
+        assert!(result.is_ok());
+
+        let measured = q_layer.measure_qubits();
+        assert_eq!(parsed.num_qubits as usize, measured.len());
+        for value in measured {
+            assert_eq!(0.5, (value * 10.0).round() / 10.0);
+        }
+    }
+
+    #[test]
+    fn test_execute_grovers_file() {
+        let qasm = std::fs::read_to_string("qasm_files/Grovers_5_qubits.openqasm")
+            .expect("should read Grovers_5_qubits.openqasm");
+
+        let parsed = openq3_parser::parse(&qasm).expect("parser should parse Grover qasm");
+        let mut q_layer = QubitLayer::new(parsed.num_qubits);
+
+        let result = q_layer.execute_noiseless(parsed.ops.clone());
+        assert!(result.is_ok());
+
+        let measured = q_layer.measure_qubits();
+        assert_eq!(parsed.num_qubits as usize, measured.len());
+        assert!(measured.iter().all(|value| (0.0..=1.0).contains(value)));
+    }
 }
 
 mod parser_tests {
+    use super::SingleCtrlQubitOp;
+    use super::TwoCtrlQubitOp;
     use super::*;
     use std::fs;
 
     #[test]
-    fn test_openq3_parser_parse_valid() {
+    fn parse_valid() {
         let qasm = "qreg q[3];\nx q[0];\ny q[1];\nz q[2];\nh q[0];\ns q[1];\nt q[2];";
 
         let parsed = openq3_parser::parse(qasm).expect("parser should parse valid qasm");
 
         assert_eq!(3, parsed.num_qubits);
         assert_eq!(6, parsed.ops.len());
-        assert_eq!((QuantumOp::PauliX, 0), parsed.ops[0]);
-        assert_eq!((QuantumOp::PauliY, 1), parsed.ops[1]);
-        assert_eq!((QuantumOp::PauliZ, 2), parsed.ops[2]);
-        assert_eq!((QuantumOp::Hadamard, 0), parsed.ops[3]);
-        assert_eq!((QuantumOp::S, 1), parsed.ops[4]);
-        assert_eq!((QuantumOp::T, 2), parsed.ops[5]);
+        assert_eq!(QInstruct::Single((QuantumOp::PauliX, 0)), parsed.ops[0]);
+        assert_eq!(QInstruct::Single((QuantumOp::PauliY, 1)), parsed.ops[1]);
+        assert_eq!(QInstruct::Single((QuantumOp::PauliZ, 2)), parsed.ops[2]);
+        assert_eq!(QInstruct::Single((QuantumOp::Hadamard, 0)), parsed.ops[3]);
+        assert_eq!(QInstruct::Single((QuantumOp::S, 1)), parsed.ops[4]);
+        assert_eq!(QInstruct::Single((QuantumOp::T, 2)), parsed.ops[5]);
     }
 
     #[test]
-    fn test_openq3_parser_parse_grovers_file() {
+    fn parse_controlled_x_ops() {
+        let qasm = fs::read_to_string("qasm_files/Controllex_X_5_qubits.openqasm")
+            .expect("should read Controllex_X_5_qubits.openqasm");
+
+        let parsed = openq3_parser::parse(&qasm).expect("parser should parse cx qasm");
+
+        assert_eq!(5, parsed.num_qubits);
+        assert_eq!(7, parsed.ops.len());
+        assert_eq!(QInstruct::Single((QuantumOp::Hadamard, 0)), parsed.ops[0]);
+        assert_eq!(QInstruct::Single((QuantumOp::Hadamard, 1)), parsed.ops[1]);
+        assert_eq!(QInstruct::Single((QuantumOp::Hadamard, 2)), parsed.ops[2]);
+        assert_eq!(QInstruct::Single((QuantumOp::Hadamard, 3)), parsed.ops[3]);
+        assert_eq!(QInstruct::Single((QuantumOp::Hadamard, 4)), parsed.ops[4]);
+        assert_eq!(
+            QInstruct::SingleCtrl((SingleCtrlQubitOp::ControlledX, 0, 1)),
+            parsed.ops[5]
+        );
+        assert_eq!(
+            QInstruct::SingleCtrl((SingleCtrlQubitOp::ControlledX, 2, 3)),
+            parsed.ops[6]
+        );
+    }
+
+    #[test]
+    fn parse_controlled_z_ops() {
+        let qasm = fs::read_to_string("qasm_files/Controllex_Z_5_qubits.openqasm")
+            .expect("should read Controllex_Z_5_qubits.openqasm");
+
+        let parsed = openq3_parser::parse(&qasm).expect("parser should parse cz qasm");
+
+        assert_eq!(5, parsed.num_qubits);
+        assert_eq!(7, parsed.ops.len());
+        assert_eq!(QInstruct::Single((QuantumOp::Hadamard, 0)), parsed.ops[0]);
+        assert_eq!(QInstruct::Single((QuantumOp::Hadamard, 1)), parsed.ops[1]);
+        assert_eq!(QInstruct::Single((QuantumOp::Hadamard, 2)), parsed.ops[2]);
+        assert_eq!(QInstruct::Single((QuantumOp::Hadamard, 3)), parsed.ops[3]);
+        assert_eq!(QInstruct::Single((QuantumOp::Hadamard, 4)), parsed.ops[4]);
+        assert_eq!(
+            QInstruct::SingleCtrl((SingleCtrlQubitOp::ControlledZ, 0, 1)),
+            parsed.ops[5]
+        );
+        assert_eq!(
+            QInstruct::SingleCtrl((SingleCtrlQubitOp::ControlledZ, 2, 3)),
+            parsed.ops[6]
+        );
+    }
+
+    #[test]
+    fn parse_grovers_file() {
         let qasm = fs::read_to_string("qasm_files/Grovers_5_qubits.openqasm")
             .expect("should read Grovers_5_qubits.openqasm");
 
@@ -431,22 +615,105 @@ mod parser_tests {
 
         assert!(parsed.num_qubits == 5);
         assert!(!parsed.ops.is_empty());
-        assert_eq!((QuantumOp::Hadamard, 0), parsed.ops[0]);
+        assert_eq!(QInstruct::Single((QuantumOp::Hadamard, 0)), parsed.ops[0]);
+
+        let has_toffoli = parsed
+            .ops
+            .iter()
+            .any(|op| matches!(op, QInstruct::TwoCtrl((TwoCtrlQubitOp::Toffoli, _, _, _))));
+        assert!(has_toffoli);
     }
 
     #[test]
-    fn test_openq3_parser_skips_unknown_op() {
+    fn parse_multiops_3_file() {
+        let qasm = fs::read_to_string("qasm_files/MultiOps_3_qubits.openqasm")
+            .expect("should read MultiOps_3_qubits.openqasm");
+
+        let parsed = openq3_parser::parse(&qasm).expect("parser should parse MultiOps_3 qasm");
+
+        assert_eq!(3, parsed.num_qubits);
+        assert_eq!(9, parsed.ops.len());
+        assert!(parsed.ops.iter().any(|op| matches!(
+            op,
+            QInstruct::SingleCtrl((SingleCtrlQubitOp::ControlledX, _, _))
+        )));
+        assert!(parsed.ops.iter().any(|op| matches!(
+            op,
+            QInstruct::SingleCtrl((SingleCtrlQubitOp::ControlledZ, _, _))
+        )));
+    }
+
+    #[test]
+    fn parse_multiops_4_file() {
+        let qasm = fs::read_to_string("qasm_files/MultiOps_4_qubits.openqasm")
+            .expect("should read MultiOps_4_qubits.openqasm");
+
+        let parsed = openq3_parser::parse(&qasm).expect("parser should parse MultiOps_4 qasm");
+
+        assert_eq!(4, parsed.num_qubits);
+        assert_eq!(10, parsed.ops.len());
+        assert!(parsed
+            .ops
+            .iter()
+            .any(|op| matches!(op, QInstruct::Single((QuantumOp::PauliY, 0)))));
+        assert!(parsed.ops.iter().any(|op| matches!(
+            op,
+            QInstruct::SingleCtrl((SingleCtrlQubitOp::ControlledX, 0, 2))
+        )));
+        assert!(parsed.ops.iter().any(|op| matches!(
+            op,
+            QInstruct::SingleCtrl((SingleCtrlQubitOp::ControlledZ, 1, 3))
+        )));
+    }
+
+    #[test]
+    fn parse_multiops_5_file() {
+        let qasm = fs::read_to_string("qasm_files/MultiOps_5_qubits.openqasm")
+            .expect("should read MultiOps_5_qubits.openqasm");
+
+        let parsed = openq3_parser::parse(&qasm).expect("parser should parse MultiOps_5 qasm");
+
+        assert_eq!(5, parsed.num_qubits);
+        assert_eq!(13, parsed.ops.len());
+
+        let cx_count = parsed
+            .ops
+            .iter()
+            .filter(|op| {
+                matches!(
+                    op,
+                    QInstruct::SingleCtrl((SingleCtrlQubitOp::ControlledX, _, _))
+                )
+            })
+            .count();
+        let cz_count = parsed
+            .ops
+            .iter()
+            .filter(|op| {
+                matches!(
+                    op,
+                    QInstruct::SingleCtrl((SingleCtrlQubitOp::ControlledZ, _, _))
+                )
+            })
+            .count();
+
+        assert_eq!(2, cx_count);
+        assert_eq!(2, cz_count);
+    }
+
+    #[test]
+    fn skips_unknown_op() {
         let qasm = "qreg q[2];\nfoo q[1];\nx q[0];";
 
         let parsed = openq3_parser::parse(qasm).expect("parser should skip unknown op");
 
         assert_eq!(2, parsed.num_qubits);
         assert_eq!(1, parsed.ops.len());
-        assert_eq!((QuantumOp::PauliX, 0), parsed.ops[0]);
+        assert_eq!(QInstruct::Single((QuantumOp::PauliX, 0)), parsed.ops[0]);
     }
 
     #[test]
-    fn test_openq3_parser_invalid_num_qubits() {
+    fn invalid_num_qubits() {
         let qasm = "qreg q[];\nx q[0];";
 
         let parsed = openq3_parser::parse(qasm);
@@ -454,7 +721,7 @@ mod parser_tests {
     }
 
     #[test]
-    fn test_openq3_parser_invalid_target_qubit() {
+    fn invalid_target_qubit() {
         let qasm = "qreg q[2];\nx q[a];";
 
         let parsed = openq3_parser::parse(qasm);

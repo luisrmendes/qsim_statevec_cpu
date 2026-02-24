@@ -27,6 +27,7 @@ The following gate operations are implemented:
 
 This repository includes a pre-commit hook in `.githooks/pre-commit` that runs:
 
+- `cargo fmt -- --check`
 - `cargo check`
 - `cargo test -q`
 
