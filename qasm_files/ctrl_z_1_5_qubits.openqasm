@@ -1,4 +1,5 @@
 // Controlled Z test on full superposition
+
 OPENQASM 3.0;
 include "stdgates.inc";
 

@@ -114,11 +114,6 @@ mod openqasm_tests {
         }
     }
 
-    fn round_to(x: f64, places: u32) -> f64 {
-        let factor = 10_f64.powi(places as i32);
-        (x * factor).round() / factor
-    }
-
     // #[test]
     // fn grovers_5_qubits() {
     //     let filename = "grovers_5_qubits";
@@ -135,6 +130,11 @@ mod openqasm_tests {
     //     assert_eq!(parsed.num_qubits as usize, measured.len());
     //     assert!(measured.iter().all(|value| (0.0..=1.0).contains(value)));
     // }
+
+    fn round_to(x: f64, places: u32) -> f64 {
+        let factor = 10_f64.powi(places as i32);
+        (x * factor).round() / factor
+    }
 }
 
 mod qubitlayer_tests {
