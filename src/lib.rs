@@ -18,7 +18,7 @@
 //!     (QuantumOp::Hadamard, 3),
 //! ];
 //!
-//! if let Err(e) = q_layer.execute_noiseless(instructions) {
+//! if let Err(e) = q_layer.execute_noiseless(&instructions) {
 //!     panic!("Failed to execute instructions! Error: {e}");
 //! }
 //!
@@ -185,7 +185,7 @@ impl QubitLayer {
     ///
     /// let mut q_layer = QubitLayer::new(2);
     /// let instructions = vec![(QuantumOp::PauliX, 0), (QuantumOp::PauliX, 1)];
-    /// q_layer.execute_noiseless(instructions);
+    /// q_layer.execute_noiseless(&instructions);
     ///
     /// // qubits 0 and 1 must be 1.0
     /// assert_eq!(q_layer.measure_qubits()[0], 1.0);
@@ -194,12 +194,11 @@ impl QubitLayer {
     ///
     /// # Errors
     /// If operation target qubit is out of range.
-    pub fn execute_noiseless<I, T>(&mut self, quantum_instructions: I) -> Result<(), String>
+    pub fn execute_noiseless<T>(&mut self, quantum_instructions: &[T]) -> Result<(), String>
     where
-        I: IntoIterator<Item = T>,
-        T: Into<QInstruct>,
+        T: Clone + Into<QInstruct>,
     {
-        for instruction in quantum_instructions {
+        for instruction in quantum_instructions.iter().cloned() {
             let _ = self.execute_instruction(instruction.into())?;
         }
         Ok(())
@@ -308,7 +307,7 @@ impl QubitLayer {
     /// use qsim_statevec_cpu::{QubitLayer, QuantumOp};
     ///
     /// let mut q_layer = QubitLayer::new(20);
-    /// q_layer.execute_noiseless(vec![(QuantumOp::Hadamard, 0)]);
+    /// q_layer.execute_noiseless(&[(QuantumOp::Hadamard, 0)]);
     /// println!("{:?}", q_layer.measure_qubits());
     ///
     /// ```

@@ -45,7 +45,7 @@ fn main() {
         (QuantumOp::T, 0),
         (QuantumOp::T, 1),
     ];
-    if let Err(error) = layer.execute_noiseless(instructions) {
+    if let Err(error) = layer.execute_noiseless(&instructions) {
         eprintln!("Failed to execute instructions: {error}");
         return;
     }
