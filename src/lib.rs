@@ -1,7 +1,7 @@
 //! Quantum circuit simulator
 //!
 //! Provides an abstraction for quantum circuit simulations.
-//! Uses the state vector simulation method.
+//! Uses the state vector simulation method running on CPU using main system memory.
 //! Memory consumption is 8 * 2 * 2<sup>`num_qubits`</sup> bytes. For example, simulating 25 qubits costs ~537 MB.
 //!
 //! # Example
@@ -33,9 +33,6 @@
 use num::pow;
 use num::Complex;
 use rand::Rng;
-use serde::de;
-use serde::de::{VariantAccess, Visitor};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 use std::fmt::Write;
 use std::ops::Add;
@@ -49,98 +46,8 @@ pub enum QuantumOp {
     PauliY,
     PauliZ,
     Hadamard,
-}
-
-impl Serialize for QuantumOp {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        match *self {
-            QuantumOp::PauliX => serializer.serialize_unit_variant("QuantumOp", 0, "PauliX"),
-            QuantumOp::PauliY => serializer.serialize_unit_variant("QuantumOp", 1, "PauliY"),
-            QuantumOp::PauliZ => serializer.serialize_unit_variant("QuantumOp", 1, "PauliZ"),
-            QuantumOp::Hadamard => serializer.serialize_unit_variant("QuantumOp", 1, "Hadamard"),
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for QuantumOp {
-    fn deserialize<D>(deserializer: D) -> Result<QuantumOp, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        pub enum Field {
-            PauliX,
-            PauliY,
-            PauliZ,
-            Hadamard,
-        }
-        impl<'de> Deserialize<'de> for Field {
-            fn deserialize<D>(deserializer: D) -> Result<Field, D::Error>
-            where
-                D: Deserializer<'de>,
-            {
-                struct FieldVisitor;
-
-                impl Visitor<'_> for FieldVisitor {
-                    type Value = Field;
-
-                    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                        formatter.write_str("`PauliX`, `PauliY`, `PauliZ`, `Hadamard`")
-                    }
-
-                    fn visit_str<E>(self, value: &str) -> Result<Field, E>
-                    where
-                        E: de::Error,
-                    {
-                        match value {
-                            "PauliX" => Ok(Field::PauliX),
-                            "PauliY" => Ok(Field::PauliY),
-                            "PauliZ" => Ok(Field::PauliZ),
-                            "Hadamard" => Ok(Field::Hadamard),
-
-                            _ => Err(de::Error::unknown_variant(
-                                value,
-                                &["PauliX", "PauliY", "PauliZ", "Hadamard"],
-                            )),
-                        }
-                    }
-                }
-
-                deserializer.deserialize_identifier(FieldVisitor)
-            }
-        }
-
-        struct MyEnumVisitor;
-
-        impl<'de> Visitor<'de> for MyEnumVisitor {
-            type Value = QuantumOp;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("struct QuantumOp")
-            }
-
-            fn visit_enum<A>(self, data: A) -> Result<QuantumOp, A::Error>
-            where
-                A: de::EnumAccess<'de>,
-            {
-                let (field, variant) = data.variant::<Field>()?;
-                match field {
-                    Field::PauliX => variant.unit_variant().map(|()| QuantumOp::PauliX),
-                    Field::PauliY => variant.unit_variant().map(|()| QuantumOp::PauliY),
-                    Field::PauliZ => variant.unit_variant().map(|()| QuantumOp::PauliX),
-                    Field::Hadamard => variant.unit_variant().map(|()| QuantumOp::Hadamard),
-                }
-            }
-        }
-
-        deserializer.deserialize_enum(
-            "QuantumOp",
-            &["PauliX", "PauliY", "PauliZ", "Hadamard"],
-            MyEnumVisitor,
-        )
-    }
+    S,
+    T,
 }
 
 pub type QGates = Vec<(QuantumOp, TargetQubit)>;
@@ -156,98 +63,6 @@ pub struct NoiseModel {
 impl NoiseModel {
     fn is_valid(self) -> bool {
         (0.0..=1.0).contains(&self.gate_error_prob) && (0.0..=1.0).contains(&self.readout_flip_prob)
-    }
-}
-
-/// Quantum Assembly parser.
-/// Supports a simple subset of `OpenQASM` 3.0 (<https://openqasm.com/versions/3.0/index.html>)
-pub mod openq3_parser {
-    use crate::QGates;
-    use crate::QuantumOp;
-    use crate::TargetQubit;
-
-    pub struct ParsedInstruct {
-        pub num_qubits: u32,
-        pub ops: QGates,
-    }
-
-    /// Parses the contents of a qasm file
-    ///
-    /// # Errors
-    /// Returns error if encounters semantic errors in the qasm file contents
-    pub fn parse(file_contents: &str) -> Result<ParsedInstruct, String> {
-        // create a vector of strings split by newline
-        let mut lines: Vec<String> = file_contents
-            .split('\n')
-            .map(std::borrow::ToOwned::to_owned)
-            .collect();
-
-        // find qreg declaration line
-        let Some(remove_delim) = lines.iter().position(|line| line.contains("qreg")) else {
-            return Err("Failed to parse the number of qubits!".to_owned());
-        };
-
-        // Parse the number of qubits
-        let num_qubits: String = lines[remove_delim]
-            .chars()
-            .filter(|&c| c.is_numeric())
-            .collect();
-        let Ok(num_qubits) = num_qubits.parse::<u32>() else {
-            return Err("Failed to parse the number of qubits!".to_owned());
-        };
-
-        // remove all lines before and including qreg
-        lines.drain(0..=remove_delim);
-
-        // Filter each newline
-        let mut parsed_instructions: Vec<(QuantumOp, TargetQubit)> = vec![];
-        for line in &lines {
-            let operation: &str = match line.split_whitespace().next() {
-                Some(operation) => operation,
-                None => continue,
-            };
-
-            // parse qubit target list
-            let target_qubits: TargetQubit = match operation {
-                // fetch the only target qubit after the op string
-                "x" | "y" | "z" | "h" => {
-                    let filtered_line: String = line
-                        .chars()
-                        .filter(|&c| c.is_numeric() || c == ' ')
-                        .collect();
-                    let filtered_line: Vec<String> = filtered_line
-                        .split(' ')
-                        .map(std::borrow::ToOwned::to_owned)
-                        .collect();
-                    match filtered_line[1].parse::<TargetQubit>() {
-                        Ok(x) => x,
-                        Err(_) => return Err("Failed to parse the target qubit!".to_owned()),
-                    }
-                }
-                // TODO: fetch two target qubits after the op string cx and cz
-                // TODO: fetch three target qubits after the op string ccx
-                _ => {
-                    // trace!("Skipping unknown operation {}", other);
-                    continue;
-                }
-            };
-
-            // parse operation codes
-            let operation: QuantumOp = match operation {
-                "x" => QuantumOp::PauliX,
-                "y" => QuantumOp::PauliY,
-                "z" => QuantumOp::PauliZ,
-                "h" => QuantumOp::Hadamard,
-                other => return Err(format!("Operation Code {other} not recognized!")),
-            };
-
-            parsed_instructions.push((operation, target_qubits));
-        }
-
-        Ok(ParsedInstruct {
-            num_qubits,
-            ops: parsed_instructions,
-        })
     }
 }
 
@@ -299,6 +114,8 @@ impl QubitLayer {
                     QuantumOp::PauliY => qubit_layer.pauli_y(target_qubit),
                     QuantumOp::PauliZ => qubit_layer.pauli_z(target_qubit),
                     QuantumOp::Hadamard => qubit_layer.hadamard(target_qubit),
+                    QuantumOp::S => qubit_layer.s_gate(target_qubit),
+                    QuantumOp::T => qubit_layer.t_gate(target_qubit),
                 }
 
                 if rng.gen::<f64>() < noise_model.gate_error_prob {
@@ -369,6 +186,12 @@ impl QubitLayer {
                 }
                 QuantumOp::Hadamard => {
                     self.hadamard(target_qubit);
+                }
+                QuantumOp::S => {
+                    self.s_gate(target_qubit);
+                }
+                QuantumOp::T => {
+                    self.t_gate(target_qubit);
                 }
             }
         }
@@ -444,16 +267,33 @@ impl QubitLayer {
         }
     }
 
-    /// Scales the amplitudes of the `QubitLayer` by a factor of `scale`.
-    fn scale_amplitudes(&mut self, scale: u32) {
-        let scale = f64::from(scale);
-        for amplitude in &mut self.main {
-            *amplitude /= scale;
+    fn s_gate(&mut self, target_qubit: u32) {
+        for state in 0..self.main.len() {
+            if self.main[state] != Complex::new(0.0, 0.0) {
+                if state & Self::mask(target_qubit as usize) != 0 {
+                    self.parity[state] = Complex::new(0.0, 1.0) * self.main[state];
+                } else {
+                    self.parity[state] = self.main[state];
+                }
+            }
         }
 
-        for amplitude in &mut self.parity {
-            *amplitude /= scale;
+        self.reset_parity_layer();
+    }
+
+    fn t_gate(&mut self, target_qubit: u32) {
+        let t_const = Complex::from_polar(1.0, std::f64::consts::FRAC_PI_4);
+        for state in 0..self.main.len() {
+            if self.main[state] != Complex::new(0.0, 0.0) {
+                if state & Self::mask(target_qubit as usize) != 0 {
+                    self.parity[state] = t_const * self.main[state];
+                } else {
+                    self.parity[state] = self.main[state];
+                }
+            }
         }
+
+        self.reset_parity_layer();
     }
 
     fn hadamard(&mut self, target_qubit: u32) {
@@ -519,6 +359,18 @@ impl QubitLayer {
         self.reset_parity_layer();
     }
 
+    /// Scales the amplitudes of the `QubitLayer` by a factor of `scale`.
+    fn scale_amplitudes(&mut self, scale: u32) {
+        let scale = f64::from(scale);
+        for amplitude in &mut self.main {
+            *amplitude /= scale;
+        }
+
+        for amplitude in &mut self.parity {
+            *amplitude /= scale;
+        }
+    }
+
     fn reset_parity_layer(&mut self) {
         // clone parity qubit layer to qubit layer
         // self.main = self.parity.clone();
@@ -542,7 +394,7 @@ impl fmt::Debug for QubitLayer {
         for index_main in 0..self.main.len() {
             writeln!(
                 &mut output,
-                "state {:b} -> {}",
+                "|{:b}>\t -> {}",
                 index_main, self.main[index_main]
             )?;
         }
@@ -647,6 +499,100 @@ impl AddAssign<&QubitLayer> for QubitLayer {
 impl AddAssign for QubitLayer {
     fn add_assign(&mut self, rhs: Self) {
         *self += &rhs;
+    }
+}
+
+/// Quantum Assembly parser.
+/// Supports a simple subset of `OpenQASM` 3.0 (<https://openqasm.com/versions/3.0/index.html>)
+pub mod openq3_parser {
+    use crate::QGates;
+    use crate::QuantumOp;
+    use crate::TargetQubit;
+
+    pub struct ParsedInstruct {
+        pub num_qubits: u32,
+        pub ops: QGates,
+    }
+
+    /// Parses the contents of a qasm file
+    ///
+    /// # Errors
+    /// Returns error if encounters semantic errors in the qasm file contents
+    pub fn parse(file_contents: &str) -> Result<ParsedInstruct, String> {
+        // create a vector of strings split by newline
+        let mut lines: Vec<String> = file_contents
+            .split('\n')
+            .map(std::borrow::ToOwned::to_owned)
+            .collect();
+
+        // find qreg declaration line
+        let Some(remove_delim) = lines.iter().position(|line| line.contains("qreg")) else {
+            return Err("Failed to parse the number of qubits!".to_owned());
+        };
+
+        // Parse the number of qubits
+        let num_qubits: String = lines[remove_delim]
+            .chars()
+            .filter(|&c| c.is_numeric())
+            .collect();
+        let Ok(num_qubits) = num_qubits.parse::<u32>() else {
+            return Err("Failed to parse the number of qubits!".to_owned());
+        };
+
+        // remove all lines before and including qreg
+        lines.drain(0..=remove_delim);
+
+        // Filter each newline
+        let mut parsed_instructions: Vec<(QuantumOp, TargetQubit)> = vec![];
+        for line in &lines {
+            let operation: &str = match line.split_whitespace().next() {
+                Some(operation) => operation,
+                None => continue,
+            };
+
+            // parse qubit target list
+            let target_qubits: TargetQubit = match operation {
+                // fetch the only target qubit after the op string
+                "x" | "y" | "z" | "h" | "s" | "t" => {
+                    let filtered_line: String = line
+                        .chars()
+                        .filter(|&c| c.is_numeric() || c == ' ')
+                        .collect();
+                    let filtered_line: Vec<String> = filtered_line
+                        .split(' ')
+                        .map(std::borrow::ToOwned::to_owned)
+                        .collect();
+                    match filtered_line[1].parse::<TargetQubit>() {
+                        Ok(x) => x,
+                        Err(_) => return Err("Failed to parse the target qubit!".to_owned()),
+                    }
+                }
+                // TODO: fetch two target qubits after the op string cx and cz
+                // TODO: fetch three target qubits after the op string ccx
+                _ => {
+                    // trace!("Skipping unknown operation {}", other);
+                    continue;
+                }
+            };
+
+            // parse operation codes
+            let operation: QuantumOp = match operation {
+                "x" => QuantumOp::PauliX,
+                "y" => QuantumOp::PauliY,
+                "z" => QuantumOp::PauliZ,
+                "h" => QuantumOp::Hadamard,
+                "s" => QuantumOp::S,
+                "t" => QuantumOp::T,
+                other => return Err(format!("Operation Code {other} not recognized!")),
+            };
+
+            parsed_instructions.push((operation, target_qubits));
+        }
+
+        Ok(ParsedInstruct {
+            num_qubits,
+            ops: parsed_instructions,
+        })
     }
 }
 

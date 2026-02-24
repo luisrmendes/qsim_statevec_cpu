@@ -16,7 +16,6 @@ keywords = ["quantum", "simulator"]
 [dependencies]
 num = "0.4.0"
 rayon = "1.10.0"
-serde = "1.0.202"
 rand = "0.8"
 
 [dev-dependencies]
