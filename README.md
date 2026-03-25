@@ -20,6 +20,10 @@ The following gate operations are implemented:
 - Hadamard gate
 - T gate
 - S gate
+- Controlled X gate
+- Controlled Y gate
+- Sqrt Pauli X gate
+- Sqrt Pauli Y gate
 
 ## Dev Notes
 
