@@ -602,7 +602,7 @@ mod qubitlayer_tests {
         let prep_result = q_layer.execute_noiseless(&prep);
         assert!(prep_result.is_ok());
 
-        let toffoli_result = q_layer.execute_noiseless(&[(TwoCtrlQubitOp::Toffoli, 0, 1, 2)]);
+        let toffoli_result = q_layer.execute_noiseless(&[(TwoCtrlQubitOp::Toffoli, 1, 2, 0)]);
         assert!(toffoli_result.is_ok());
 
         let measured = q_layer.measure_qubits();
@@ -742,11 +742,11 @@ mod parser_tests {
             .any(|op| matches!(op, QInstruct::Single((QuantumOp::PauliY, 0)))));
         assert!(parsed.ops.iter().any(|op| matches!(
             op,
-            QInstruct::SingleCtrl((SingleCtrlQubitOp::ControlledX, 0, 2))
+            QInstruct::SingleCtrl((SingleCtrlQubitOp::ControlledX, 2, 0))
         )));
         assert!(parsed.ops.iter().any(|op| matches!(
             op,
-            QInstruct::SingleCtrl((SingleCtrlQubitOp::ControlledZ, 1, 3))
+            QInstruct::SingleCtrl((SingleCtrlQubitOp::ControlledZ, 3, 1))
         )));
     }
 

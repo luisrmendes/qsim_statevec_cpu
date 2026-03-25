@@ -63,15 +63,11 @@ pub enum TwoCtrlQubitOp {
     Toffoli,
 }
 
-pub type SingleQubitInstruct = (SingleQubitOp, TargetQubit);
-pub type SingleCtrlQubitInstruct = (SingleCtrlQubitOp, TargetQubit, CtrlQubit);
-pub type TwoCtrlQubitInstruct = (TwoCtrlQubitOp, TargetQubit, CtrlQubit, CtrlQubit);
-
 #[derive(Clone, PartialEq, Debug)]
 pub enum QInstruct {
-    Single(SingleQubitInstruct),
-    SingleCtrl(SingleCtrlQubitInstruct),
-    TwoCtrl(TwoCtrlQubitInstruct),
+    Single((SingleQubitOp, TargetQubit)),
+    SingleCtrl((SingleCtrlQubitOp, CtrlQubit, TargetQubit)),
+    TwoCtrl((TwoCtrlQubitOp, CtrlQubit, CtrlQubit, TargetQubit)),
 }
 
 impl From<(QuantumOp, TargetQubit)> for QInstruct {
@@ -80,14 +76,14 @@ impl From<(QuantumOp, TargetQubit)> for QInstruct {
     }
 }
 
-impl From<(SingleCtrlQubitOp, TargetQubit, CtrlQubit)> for QInstruct {
-    fn from(value: (SingleCtrlQubitOp, TargetQubit, CtrlQubit)) -> Self {
+impl From<(SingleCtrlQubitOp, CtrlQubit, TargetQubit)> for QInstruct {
+    fn from(value: (SingleCtrlQubitOp, CtrlQubit, TargetQubit)) -> Self {
         QInstruct::SingleCtrl(value)
     }
 }
 
-impl From<(TwoCtrlQubitOp, TargetQubit, CtrlQubit, CtrlQubit)> for QInstruct {
-    fn from(value: (TwoCtrlQubitOp, TargetQubit, CtrlQubit, CtrlQubit)) -> Self {
+impl From<(TwoCtrlQubitOp, CtrlQubit, CtrlQubit, TargetQubit)> for QInstruct {
+    fn from(value: (TwoCtrlQubitOp, CtrlQubit, CtrlQubit, TargetQubit)) -> Self {
         QInstruct::TwoCtrl(value)
     }
 }
@@ -143,6 +139,7 @@ impl QubitLayer {
 
         let mut rng = rand::thread_rng();
         let mut accumulated_qubit_layer = QubitLayer::new(self.get_num_qubits());
+        accumulated_qubit_layer.main[0] = Complex::new(0.0, 0.0);
 
         for _ in 0..shots {
             let mut qubit_layer = QubitLayer::new(self.get_num_qubits());
@@ -225,16 +222,16 @@ impl QubitLayer {
 
                 Ok(target_qubit)
             }
-            QInstruct::SingleCtrl((op, target_qubit, control_qubit)) => {
-                if target_qubit >= self.get_num_qubits() {
-                    return Err(format!(
-                        "Target qubit {target_qubit:?} is out of range. Size of layer is {}",
-                        self.get_num_qubits()
-                    ));
-                }
+            QInstruct::SingleCtrl((op, control_qubit, target_qubit)) => {
                 if control_qubit >= self.get_num_qubits() {
                     return Err(format!(
                         "Control qubit {control_qubit:?} is out of range. Size of layer is {}",
+                        self.get_num_qubits()
+                    ));
+                }
+                if target_qubit >= self.get_num_qubits() {
+                    return Err(format!(
+                        "Target qubit {target_qubit:?} is out of range. Size of layer is {}",
                         self.get_num_qubits()
                     ));
                 }
@@ -250,13 +247,7 @@ impl QubitLayer {
 
                 Ok(target_qubit)
             }
-            QInstruct::TwoCtrl((op, target_qubit, control_qubit1, control_qubit2)) => {
-                if target_qubit >= self.get_num_qubits() {
-                    return Err(format!(
-                        "Target qubit {target_qubit:?} is out of range. Size of layer is {}",
-                        self.get_num_qubits()
-                    ));
-                }
+            QInstruct::TwoCtrl((op, control_qubit1, control_qubit2, target_qubit)) => {
                 if control_qubit1 >= self.get_num_qubits() {
                     return Err(format!(
                         "Control qubit {control_qubit1:?} is out of range. Size of layer is {}",
@@ -266,6 +257,12 @@ impl QubitLayer {
                 if control_qubit2 >= self.get_num_qubits() {
                     return Err(format!(
                         "Control qubit {control_qubit2:?} is out of range. Size of layer is {}",
+                        self.get_num_qubits()
+                    ));
+                }
+                if target_qubit >= self.get_num_qubits() {
+                    return Err(format!(
+                        "Target qubit {target_qubit:?} is out of range. Size of layer is {}",
                         self.get_num_qubits()
                     ));
                 }
