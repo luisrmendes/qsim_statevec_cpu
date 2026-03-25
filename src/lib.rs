@@ -48,6 +48,7 @@ pub enum SingleQubitOp {
     Hadamard,
     S,
     T,
+    SX,
 }
 
 pub type QuantumOp = SingleQubitOp;
@@ -218,6 +219,7 @@ impl QubitLayer {
                     QuantumOp::Hadamard => self.hadamard(target_qubit),
                     QuantumOp::S => self.s_gate(target_qubit),
                     QuantumOp::T => self.t_gate(target_qubit),
+                    QuantumOp::SX => self.sqrt_pauli_x(target_qubit),
                 }
 
                 Ok(target_qubit)
@@ -345,6 +347,24 @@ impl QubitLayer {
             parity: vec![Complex::new(0.0, 0.0); 2_usize.pow(num_qubits)],
             num_qubits,
         }
+    }
+
+    fn sqrt_pauli_x(&mut self, target_qubit: u32) {
+        let const_same_state = Complex::new(0.5, 0.5);
+        let const_flipped_state = Complex::new(0.5, -0.5);
+
+        for state in 0..self.main.len() {
+            if self.main[state] != Complex::new(0.0, 0.0) {
+                let target_state: usize = state ^ Self::mask(target_qubit as usize);
+
+                // |0> and |1> components both contribute with:
+                // (1+i)/2 to the same basis index and (1-i)/2 to the flipped index.
+                self.parity[state] += const_same_state * self.main[state];
+                self.parity[target_state] += const_flipped_state * self.main[state];
+            }
+        }
+
+        self.reset_parity_layer();
     }
 
     fn toffoli(&mut self, control_qubit1: u32, control_qubit2: u32, target_qubit: u32) {
@@ -722,7 +742,7 @@ pub mod openq3_parser {
             // parse qubit target list
             let target_qubits: TargetQubit = match operation {
                 // fetch the only target qubit after the op string
-                "x" | "y" | "z" | "h" | "s" | "t" => {
+                "x" | "y" | "z" | "h" | "s" | "t" | "sx" => {
                     let Some(&target) = qubits.first() else {
                         return Err("Failed to parse the target qubit!".to_owned());
                     };
@@ -743,6 +763,7 @@ pub mod openq3_parser {
                 "h" => QuantumOp::Hadamard,
                 "s" => QuantumOp::S,
                 "t" => QuantumOp::T,
+                "sx" => QuantumOp::SX,
                 other => return Err(format!("Operation Code {other} not recognized!")),
             };
 
