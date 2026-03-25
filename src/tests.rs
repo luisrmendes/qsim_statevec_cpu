@@ -561,6 +561,28 @@ mod qubitlayer_tests {
     }
 
     #[test]
+    fn test_sqrt_pauli_y_simple() {
+        let mut q_layer: QubitLayer = QubitLayer::new(1);
+
+        let result = q_layer.execute_noiseless(&[(QuantumOp::SY, 0)]);
+        assert!(result.is_ok());
+
+        let expected = vec![Complex::new(0.5, 0.5), Complex::new(-0.5, -0.5)];
+        assert_eq!(expected, q_layer.main);
+    }
+
+    #[test]
+    fn test_sqrt_pauli_y_squared_equals_pauli_y() {
+        let mut q_layer: QubitLayer = QubitLayer::new(1);
+
+        let result = q_layer.execute_noiseless(&[(QuantumOp::SY, 0), (QuantumOp::SY, 0)]);
+        assert!(result.is_ok());
+
+        let expected = vec![Complex::new(0.0, 0.0), Complex::new(0.0, -1.0)];
+        assert_eq!(expected, q_layer.main);
+    }
+
+    #[test]
     fn test_controlled_x_simple() {
         let num_qubits = 2;
         let mut q_layer: QubitLayer = QubitLayer::new(num_qubits);
@@ -673,6 +695,17 @@ mod parser_tests {
         assert_eq!(2, parsed.num_qubits);
         assert_eq!(1, parsed.ops.len());
         assert_eq!(QInstruct::Single((QuantumOp::SX, 1)), parsed.ops[0]);
+    }
+
+    #[test]
+    fn parse_sy_op() {
+        let qasm = "qreg q[2];\nsy q[1];";
+
+        let parsed = openq3_parser::parse(qasm).expect("parser should parse sy qasm");
+
+        assert_eq!(2, parsed.num_qubits);
+        assert_eq!(1, parsed.ops.len());
+        assert_eq!(QInstruct::Single((QuantumOp::SY, 1)), parsed.ops[0]);
     }
 
     #[test]

@@ -49,6 +49,7 @@ pub enum SingleQubitOp {
     S,
     T,
     SX,
+    SY,
 }
 
 pub type QuantumOp = SingleQubitOp;
@@ -220,6 +221,7 @@ impl QubitLayer {
                     QuantumOp::S => self.s_gate(target_qubit),
                     QuantumOp::T => self.t_gate(target_qubit),
                     QuantumOp::SX => self.sqrt_pauli_x(target_qubit),
+                    QuantumOp::SY => self.sqrt_pauli_y(target_qubit),
                 }
 
                 Ok(target_qubit)
@@ -361,6 +363,28 @@ impl QubitLayer {
                 // (1+i)/2 to the same basis index and (1-i)/2 to the flipped index.
                 self.parity[state] += const_same_state * self.main[state];
                 self.parity[target_state] += const_flipped_state * self.main[state];
+            }
+        }
+
+        self.reset_parity_layer();
+    }
+
+    fn sqrt_pauli_y(&mut self, target_qubit: u32) {
+        let const_same_state = Complex::new(0.5, 0.5);
+        let const_zero_to_one = Complex::new(-0.5, -0.5);
+        let const_one_to_zero = Complex::new(0.5, 0.5);
+
+        for state in 0..self.main.len() {
+            if self.main[state] != Complex::new(0.0, 0.0) {
+                let target_state: usize = state ^ Self::mask(target_qubit as usize);
+
+                self.parity[state] += const_same_state * self.main[state];
+
+                if state & Self::mask(target_qubit as usize) == 0 {
+                    self.parity[target_state] += const_zero_to_one * self.main[state];
+                } else {
+                    self.parity[target_state] += const_one_to_zero * self.main[state];
+                }
             }
         }
 
@@ -742,7 +766,7 @@ pub mod openq3_parser {
             // parse qubit target list
             let target_qubits: TargetQubit = match operation {
                 // fetch the only target qubit after the op string
-                "x" | "y" | "z" | "h" | "s" | "t" | "sx" => {
+                "x" | "y" | "z" | "h" | "s" | "t" | "sx" | "sy" => {
                     let Some(&target) = qubits.first() else {
                         return Err("Failed to parse the target qubit!".to_owned());
                     };
@@ -764,6 +788,7 @@ pub mod openq3_parser {
                 "s" => QuantumOp::S,
                 "t" => QuantumOp::T,
                 "sx" => QuantumOp::SX,
+                "sy" => QuantumOp::SY,
                 other => return Err(format!("Operation Code {other} not recognized!")),
             };
 
