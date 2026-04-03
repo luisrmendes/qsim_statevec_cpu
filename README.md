@@ -22,6 +22,7 @@ The following gate operations are implemented:
 - S gate
 - Controlled X gate
 - Controlled Y gate
+- Toffoli gate
 - Sqrt Pauli X gate
 - Sqrt Pauli Y gate
 
