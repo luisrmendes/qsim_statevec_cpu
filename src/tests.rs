@@ -215,7 +215,7 @@ mod qubitlayer_tests {
             assert!(result.is_ok());
             accumulated_layer += &shot_layer;
         }
-        accumulated_layer.scale_amplitudes(4);
+        accumulated_layer /= 4;
 
         let measured = accumulated_layer.measure_qubits();
         assert_eq!(0.5, (measured[0] * 10.0).round() / 10.0);

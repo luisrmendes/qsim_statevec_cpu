@@ -37,6 +37,7 @@ use std::fmt;
 use std::fmt::Write;
 use std::ops::Add;
 use std::ops::AddAssign;
+use std::ops::DivAssign;
 
 /// Supported quantum operations, equivalent to quantum gates in a circuit.
 /// Operations with 'Par' suffix are experimental multi-threaded implementations, not guaranteed to improve performance.
@@ -171,7 +172,7 @@ impl QubitLayer {
         }
 
         if shots > 0 {
-            accumulated_qubit_layer.scale_amplitudes(shots);
+            accumulated_qubit_layer /= shots;
         }
 
         self.main = accumulated_qubit_layer.main;
@@ -534,18 +535,6 @@ impl QubitLayer {
         self.reset_parity_layer();
     }
 
-    /// Scales the amplitudes of the `QubitLayer` by a factor of `scale`.
-    fn scale_amplitudes(&mut self, scale: u32) {
-        let scale = f64::from(scale);
-        for amplitude in &mut self.main {
-            *amplitude /= scale;
-        }
-
-        for amplitude in &mut self.parity {
-            *amplitude /= scale;
-        }
-    }
-
     fn reset_parity_layer(&mut self) {
         // clone parity qubit layer to qubit layer
         // self.main = self.parity.clone();
@@ -674,6 +663,21 @@ impl AddAssign<&QubitLayer> for QubitLayer {
 impl AddAssign for QubitLayer {
     fn add_assign(&mut self, rhs: Self) {
         *self += &rhs;
+    }
+}
+
+impl DivAssign<u32> for QubitLayer {
+    fn div_assign(&mut self, rhs: u32) {
+        assert_ne!(rhs, 0, "Cannot divide QubitLayer by zero");
+
+        let scale = f64::from(rhs);
+        for amplitude in &mut self.main {
+            *amplitude /= scale;
+        }
+
+        for amplitude in &mut self.parity {
+            *amplitude /= scale;
+        }
     }
 }
 
