@@ -138,6 +138,9 @@ impl QubitLayer {
         if !noise_model.is_valid() {
             return Err("Noise probabilities must be in the range [0.0, 1.0]".to_owned());
         }
+        if shots == 0 {
+            return Err("Number of shots must be greater than 0".to_owned());
+        }
 
         let mut rng = rand::thread_rng();
         let mut accumulated_qubit_layer = QubitLayer::new(self.get_num_qubits());

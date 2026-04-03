@@ -233,7 +233,7 @@ mod qubitlayer_tests {
         };
 
         let result = q_layer.execute_noisy_shots(&instructions, 0, noise);
-        assert!(result.is_ok());
+        assert!(result.is_err());
 
         let measured = q_layer.measure_qubits();
         assert_eq!(0.0, measured[0]);
