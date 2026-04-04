@@ -391,7 +391,6 @@ dependencies = [
  "num",
  "rand",
  "rayon",
- "serde",
 ]
 
 [[package]]

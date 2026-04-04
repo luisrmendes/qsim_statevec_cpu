@@ -1,7 +1,7 @@
 //! Quantum circuit simulator
 //!
 //! Provides an abstraction for quantum circuit simulations.
-//! Uses the state vector simulation method.
+//! Uses the state vector simulation method running on CPU using main system memory.
 //! Memory consumption is 8 * 2 * 2<sup>`num_qubits`</sup> bytes. For example, simulating 25 qubits costs ~537 MB.
 //!
 //! # Example
@@ -18,7 +18,7 @@
 //!     (QuantumOp::Hadamard, 3),
 //! ];
 //!
-//! if let Err(e) = q_layer.execute_noiseless(instructions) {
+//! if let Err(e) = q_layer.execute_noiseless(&instructions) {
 //!     panic!("Failed to execute instructions! Error: {e}");
 //! }
 //!
@@ -33,118 +33,67 @@
 use num::pow;
 use num::Complex;
 use rand::Rng;
-use serde::de;
-use serde::de::{VariantAccess, Visitor};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 use std::fmt::Write;
 use std::ops::Add;
 use std::ops::AddAssign;
+use std::ops::DivAssign;
 
 /// Supported quantum operations, equivalent to quantum gates in a circuit.
 /// Operations with 'Par' suffix are experimental multi-threaded implementations, not guaranteed to improve performance.
 #[derive(Clone, PartialEq, Debug)]
-pub enum QuantumOp {
+pub enum SingleQubitOp {
     PauliX,
     PauliY,
     PauliZ,
     Hadamard,
+    S,
+    T,
+    SX,
+    SY,
 }
 
-impl Serialize for QuantumOp {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        match *self {
-            QuantumOp::PauliX => serializer.serialize_unit_variant("QuantumOp", 0, "PauliX"),
-            QuantumOp::PauliY => serializer.serialize_unit_variant("QuantumOp", 1, "PauliY"),
-            QuantumOp::PauliZ => serializer.serialize_unit_variant("QuantumOp", 1, "PauliZ"),
-            QuantumOp::Hadamard => serializer.serialize_unit_variant("QuantumOp", 1, "Hadamard"),
-        }
+pub type QuantumOp = SingleQubitOp;
+
+#[derive(Clone, PartialEq, Debug)]
+pub enum SingleCtrlQubitOp {
+    ControlledX,
+    ControlledZ,
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub enum TwoCtrlQubitOp {
+    Toffoli,
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub enum QInstruct {
+    Single((SingleQubitOp, TargetQubit)),
+    SingleCtrl((SingleCtrlQubitOp, CtrlQubit, TargetQubit)),
+    TwoCtrl((TwoCtrlQubitOp, CtrlQubit, CtrlQubit, TargetQubit)),
+}
+
+impl From<(QuantumOp, TargetQubit)> for QInstruct {
+    fn from(value: (QuantumOp, TargetQubit)) -> Self {
+        QInstruct::Single(value)
     }
 }
 
-impl<'de> Deserialize<'de> for QuantumOp {
-    fn deserialize<D>(deserializer: D) -> Result<QuantumOp, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        pub enum Field {
-            PauliX,
-            PauliY,
-            PauliZ,
-            Hadamard,
-        }
-        impl<'de> Deserialize<'de> for Field {
-            fn deserialize<D>(deserializer: D) -> Result<Field, D::Error>
-            where
-                D: Deserializer<'de>,
-            {
-                struct FieldVisitor;
-
-                impl Visitor<'_> for FieldVisitor {
-                    type Value = Field;
-
-                    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                        formatter.write_str("`PauliX`, `PauliY`, `PauliZ`, `Hadamard`")
-                    }
-
-                    fn visit_str<E>(self, value: &str) -> Result<Field, E>
-                    where
-                        E: de::Error,
-                    {
-                        match value {
-                            "PauliX" => Ok(Field::PauliX),
-                            "PauliY" => Ok(Field::PauliY),
-                            "PauliZ" => Ok(Field::PauliZ),
-                            "Hadamard" => Ok(Field::Hadamard),
-
-                            _ => Err(de::Error::unknown_variant(
-                                value,
-                                &["PauliX", "PauliY", "PauliZ", "Hadamard"],
-                            )),
-                        }
-                    }
-                }
-
-                deserializer.deserialize_identifier(FieldVisitor)
-            }
-        }
-
-        struct MyEnumVisitor;
-
-        impl<'de> Visitor<'de> for MyEnumVisitor {
-            type Value = QuantumOp;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("struct QuantumOp")
-            }
-
-            fn visit_enum<A>(self, data: A) -> Result<QuantumOp, A::Error>
-            where
-                A: de::EnumAccess<'de>,
-            {
-                let (field, variant) = data.variant::<Field>()?;
-                match field {
-                    Field::PauliX => variant.unit_variant().map(|()| QuantumOp::PauliX),
-                    Field::PauliY => variant.unit_variant().map(|()| QuantumOp::PauliY),
-                    Field::PauliZ => variant.unit_variant().map(|()| QuantumOp::PauliX),
-                    Field::Hadamard => variant.unit_variant().map(|()| QuantumOp::Hadamard),
-                }
-            }
-        }
-
-        deserializer.deserialize_enum(
-            "QuantumOp",
-            &["PauliX", "PauliY", "PauliZ", "Hadamard"],
-            MyEnumVisitor,
-        )
+impl From<(SingleCtrlQubitOp, CtrlQubit, TargetQubit)> for QInstruct {
+    fn from(value: (SingleCtrlQubitOp, CtrlQubit, TargetQubit)) -> Self {
+        QInstruct::SingleCtrl(value)
     }
 }
 
-pub type QGates = Vec<(QuantumOp, TargetQubit)>;
+impl From<(TwoCtrlQubitOp, CtrlQubit, CtrlQubit, TargetQubit)> for QInstruct {
+    fn from(value: (TwoCtrlQubitOp, CtrlQubit, CtrlQubit, TargetQubit)) -> Self {
+        QInstruct::TwoCtrl(value)
+    }
+}
+
+pub type QInstructs = Vec<QInstruct>;
 pub type TargetQubit = u32;
+pub type CtrlQubit = u32;
 pub type MeasuredQubits = Vec<f64>;
 
 #[derive(Clone, Copy, Debug)]
@@ -156,98 +105,6 @@ pub struct NoiseModel {
 impl NoiseModel {
     fn is_valid(self) -> bool {
         (0.0..=1.0).contains(&self.gate_error_prob) && (0.0..=1.0).contains(&self.readout_flip_prob)
-    }
-}
-
-/// Quantum Assembly parser.
-/// Supports a simple subset of `OpenQASM` 3.0 (<https://openqasm.com/versions/3.0/index.html>)
-pub mod openq3_parser {
-    use crate::QGates;
-    use crate::QuantumOp;
-    use crate::TargetQubit;
-
-    pub struct ParsedInstruct {
-        pub num_qubits: u32,
-        pub ops: QGates,
-    }
-
-    /// Parses the contents of a qasm file
-    ///
-    /// # Errors
-    /// Returns error if encounters semantic errors in the qasm file contents
-    pub fn parse(file_contents: &str) -> Result<ParsedInstruct, String> {
-        // create a vector of strings split by newline
-        let mut lines: Vec<String> = file_contents
-            .split('\n')
-            .map(std::borrow::ToOwned::to_owned)
-            .collect();
-
-        // find qreg declaration line
-        let Some(remove_delim) = lines.iter().position(|line| line.contains("qreg")) else {
-            return Err("Failed to parse the number of qubits!".to_owned());
-        };
-
-        // Parse the number of qubits
-        let num_qubits: String = lines[remove_delim]
-            .chars()
-            .filter(|&c| c.is_numeric())
-            .collect();
-        let Ok(num_qubits) = num_qubits.parse::<u32>() else {
-            return Err("Failed to parse the number of qubits!".to_owned());
-        };
-
-        // remove all lines before and including qreg
-        lines.drain(0..=remove_delim);
-
-        // Filter each newline
-        let mut parsed_instructions: Vec<(QuantumOp, TargetQubit)> = vec![];
-        for line in &lines {
-            let operation: &str = match line.split_whitespace().next() {
-                Some(operation) => operation,
-                None => continue,
-            };
-
-            // parse qubit target list
-            let target_qubits: TargetQubit = match operation {
-                // fetch the only target qubit after the op string
-                "x" | "y" | "z" | "h" => {
-                    let filtered_line: String = line
-                        .chars()
-                        .filter(|&c| c.is_numeric() || c == ' ')
-                        .collect();
-                    let filtered_line: Vec<String> = filtered_line
-                        .split(' ')
-                        .map(std::borrow::ToOwned::to_owned)
-                        .collect();
-                    match filtered_line[1].parse::<TargetQubit>() {
-                        Ok(x) => x,
-                        Err(_) => return Err("Failed to parse the target qubit!".to_owned()),
-                    }
-                }
-                // TODO: fetch two target qubits after the op string cx and cz
-                // TODO: fetch three target qubits after the op string ccx
-                _ => {
-                    // trace!("Skipping unknown operation {}", other);
-                    continue;
-                }
-            };
-
-            // parse operation codes
-            let operation: QuantumOp = match operation {
-                "x" => QuantumOp::PauliX,
-                "y" => QuantumOp::PauliY,
-                "z" => QuantumOp::PauliZ,
-                "h" => QuantumOp::Hadamard,
-                other => return Err(format!("Operation Code {other} not recognized!")),
-            };
-
-            parsed_instructions.push((operation, target_qubits));
-        }
-
-        Ok(ParsedInstruct {
-            num_qubits,
-            ops: parsed_instructions,
-        })
     }
 }
 
@@ -270,36 +127,31 @@ impl QubitLayer {
     ///
     /// # Errors
     /// Returns error if operation target qubit is out of range or if noise probabilities are outside `[0.0, 1.0]`.
-    pub fn execute_noisy_shots(
+    pub fn execute_noisy_shots<T>(
         &mut self,
-        quantum_instructions: &[(QuantumOp, TargetQubit)],
+        quantum_instructions: &[T],
         shots: u32,
         noise_model: NoiseModel,
-    ) -> Result<(), String> {
+    ) -> Result<(), String>
+    where
+        T: Clone + Into<QInstruct>,
+    {
         if !noise_model.is_valid() {
             return Err("Noise probabilities must be in the range [0.0, 1.0]".to_owned());
+        }
+        if shots == 0 {
+            return Err("Number of shots must be greater than 0".to_owned());
         }
 
         let mut rng = rand::thread_rng();
         let mut accumulated_qubit_layer = QubitLayer::new(self.get_num_qubits());
+        accumulated_qubit_layer.main[0] = Complex::new(0.0, 0.0);
 
         for _ in 0..shots {
             let mut qubit_layer = QubitLayer::new(self.get_num_qubits());
 
-            for (op, target_qubit) in quantum_instructions.iter().cloned() {
-                if target_qubit >= qubit_layer.get_num_qubits() {
-                    return Err(format!(
-                        "Target qubit {target_qubit:?} is out of range. Size of layer is {}",
-                        qubit_layer.get_num_qubits()
-                    ));
-                }
-
-                match op {
-                    QuantumOp::PauliX => qubit_layer.pauli_x(target_qubit),
-                    QuantumOp::PauliY => qubit_layer.pauli_y(target_qubit),
-                    QuantumOp::PauliZ => qubit_layer.pauli_z(target_qubit),
-                    QuantumOp::Hadamard => qubit_layer.hadamard(target_qubit),
-                }
+            for instruction in quantum_instructions.iter().cloned() {
+                let target_qubit = qubit_layer.execute_instruction(instruction.into())?;
 
                 if rng.gen::<f64>() < noise_model.gate_error_prob {
                     match rng.gen_range(0..3) {
@@ -320,7 +172,7 @@ impl QubitLayer {
         }
 
         if shots > 0 {
-            accumulated_qubit_layer.scale_amplitudes(shots);
+            accumulated_qubit_layer /= shots;
         }
 
         self.main = accumulated_qubit_layer.main;
@@ -336,7 +188,7 @@ impl QubitLayer {
     ///
     /// let mut q_layer = QubitLayer::new(2);
     /// let instructions = vec![(QuantumOp::PauliX, 0), (QuantumOp::PauliX, 1)];
-    /// q_layer.execute_noiseless(instructions);
+    /// q_layer.execute_noiseless(&instructions);
     ///
     /// // qubits 0 and 1 must be 1.0
     /// assert_eq!(q_layer.measure_qubits()[0], 1.0);
@@ -345,34 +197,93 @@ impl QubitLayer {
     ///
     /// # Errors
     /// If operation target qubit is out of range.
-    pub fn execute_noiseless(
-        &mut self,
-        quantum_instructions: Vec<(QuantumOp, TargetQubit)>,
-    ) -> Result<(), String> {
-        for (op, target_qubit) in quantum_instructions {
-            if target_qubit >= self.get_num_qubits() {
-                return Err(format!(
-                    "Target qubit {target_qubit:?} is out of range. Size of layer is {}",
-                    self.get_num_qubits()
-                )
-                .to_owned());
-            }
-            match op {
-                QuantumOp::PauliX => {
-                    self.pauli_x(target_qubit);
-                }
-                QuantumOp::PauliY => {
-                    self.pauli_y(target_qubit);
-                }
-                QuantumOp::PauliZ => {
-                    self.pauli_z(target_qubit);
-                }
-                QuantumOp::Hadamard => {
-                    self.hadamard(target_qubit);
-                }
-            }
+    pub fn execute_noiseless<T>(&mut self, quantum_instructions: &[T]) -> Result<(), String>
+    where
+        T: Clone + Into<QInstruct>,
+    {
+        for instruction in quantum_instructions.iter().cloned() {
+            let _ = self.execute_instruction(instruction.into())?;
         }
         Ok(())
+    }
+
+    fn execute_instruction(&mut self, instruction: QInstruct) -> Result<TargetQubit, String> {
+        match instruction {
+            QInstruct::Single((op, target_qubit)) => {
+                if target_qubit >= self.get_num_qubits() {
+                    return Err(format!(
+                        "Target qubit {target_qubit:?} is out of range. Size of layer is {}",
+                        self.get_num_qubits()
+                    ));
+                }
+
+                match op {
+                    QuantumOp::PauliX => self.pauli_x(target_qubit),
+                    QuantumOp::PauliY => self.pauli_y(target_qubit),
+                    QuantumOp::PauliZ => self.pauli_z(target_qubit),
+                    QuantumOp::Hadamard => self.hadamard(target_qubit),
+                    QuantumOp::S => self.s_gate(target_qubit),
+                    QuantumOp::T => self.t_gate(target_qubit),
+                    QuantumOp::SX => self.sqrt_pauli_x(target_qubit),
+                    QuantumOp::SY => self.sqrt_pauli_y(target_qubit),
+                }
+
+                Ok(target_qubit)
+            }
+            QInstruct::SingleCtrl((op, control_qubit, target_qubit)) => {
+                if control_qubit >= self.get_num_qubits() {
+                    return Err(format!(
+                        "Control qubit {control_qubit:?} is out of range. Size of layer is {}",
+                        self.get_num_qubits()
+                    ));
+                }
+                if target_qubit >= self.get_num_qubits() {
+                    return Err(format!(
+                        "Target qubit {target_qubit:?} is out of range. Size of layer is {}",
+                        self.get_num_qubits()
+                    ));
+                }
+
+                match op {
+                    SingleCtrlQubitOp::ControlledX => {
+                        self.controlled_x(control_qubit, target_qubit);
+                    }
+                    SingleCtrlQubitOp::ControlledZ => {
+                        self.controlled_z(control_qubit, target_qubit);
+                    }
+                }
+
+                Ok(target_qubit)
+            }
+            QInstruct::TwoCtrl((op, control_qubit1, control_qubit2, target_qubit)) => {
+                if control_qubit1 >= self.get_num_qubits() {
+                    return Err(format!(
+                        "Control qubit {control_qubit1:?} is out of range. Size of layer is {}",
+                        self.get_num_qubits()
+                    ));
+                }
+                if control_qubit2 >= self.get_num_qubits() {
+                    return Err(format!(
+                        "Control qubit {control_qubit2:?} is out of range. Size of layer is {}",
+                        self.get_num_qubits()
+                    ));
+                }
+                if target_qubit >= self.get_num_qubits() {
+                    return Err(format!(
+                        "Target qubit {target_qubit:?} is out of range. Size of layer is {}",
+                        self.get_num_qubits()
+                    ));
+                }
+
+                match op {
+                    TwoCtrlQubitOp::Toffoli => {
+                        self.toffoli(control_qubit1, control_qubit2, target_qubit);
+                    }
+                }
+
+                Ok(target_qubit)
+            }
+        }
     }
 
     /// Returns the estimated memory usage in bytes (`8 * 2 * 2^num_qubits`).
@@ -401,7 +312,7 @@ impl QubitLayer {
     /// use qsim_statevec_cpu::{QubitLayer, QuantumOp};
     ///
     /// let mut q_layer = QubitLayer::new(20);
-    /// q_layer.execute_noiseless(vec![(QuantumOp::Hadamard, 0)]);
+    /// q_layer.execute_noiseless(&[(QuantumOp::Hadamard, 0)]);
     /// println!("{:?}", q_layer.measure_qubits());
     ///
     /// ```
@@ -444,16 +355,121 @@ impl QubitLayer {
         }
     }
 
-    /// Scales the amplitudes of the `QubitLayer` by a factor of `scale`.
-    fn scale_amplitudes(&mut self, scale: u32) {
-        let scale = f64::from(scale);
-        for amplitude in &mut self.main {
-            *amplitude /= scale;
+    fn sqrt_pauli_x(&mut self, target_qubit: u32) {
+        let const_same_state = Complex::new(0.5, 0.5);
+        let const_flipped_state = Complex::new(0.5, -0.5);
+
+        for state in 0..self.main.len() {
+            if self.main[state] != Complex::new(0.0, 0.0) {
+                let target_state: usize = state ^ Self::mask(target_qubit as usize);
+
+                // |0> and |1> components both contribute with:
+                // (1+i)/2 to the same basis index and (1-i)/2 to the flipped index.
+                self.parity[state] += const_same_state * self.main[state];
+                self.parity[target_state] += const_flipped_state * self.main[state];
+            }
         }
 
-        for amplitude in &mut self.parity {
-            *amplitude /= scale;
+        self.reset_parity_layer();
+    }
+
+    fn sqrt_pauli_y(&mut self, target_qubit: u32) {
+        let const_same_state = Complex::new(0.5, 0.5);
+        let const_zero_to_one = Complex::new(-0.5, -0.5);
+        let const_one_to_zero = Complex::new(0.5, 0.5);
+
+        for state in 0..self.main.len() {
+            if self.main[state] != Complex::new(0.0, 0.0) {
+                let target_state: usize = state ^ Self::mask(target_qubit as usize);
+
+                self.parity[state] += const_same_state * self.main[state];
+
+                if state & Self::mask(target_qubit as usize) == 0 {
+                    self.parity[target_state] += const_zero_to_one * self.main[state];
+                } else {
+                    self.parity[target_state] += const_one_to_zero * self.main[state];
+                }
+            }
         }
+
+        self.reset_parity_layer();
+    }
+
+    fn toffoli(&mut self, control_qubit1: u32, control_qubit2: u32, target_qubit: u32) {
+        for state in 0..self.main.len() {
+            if self.main[state] != Complex::new(0.0, 0.0) {
+                if state & Self::mask(control_qubit1 as usize) != 0
+                    && state & Self::mask(control_qubit2 as usize) != 0
+                {
+                    let target_state: usize = state ^ Self::mask(target_qubit as usize);
+                    self.parity[target_state] = self.main[state];
+                } else {
+                    self.parity[state] = self.main[state];
+                }
+            }
+        }
+
+        self.reset_parity_layer();
+    }
+
+    fn controlled_z(&mut self, control_qubit: u32, target_qubit: u32) {
+        for state in 0..self.main.len() {
+            if self.main[state] != Complex::new(0.0, 0.0) {
+                if state & Self::mask(control_qubit as usize) != 0
+                    && state & Self::mask(target_qubit as usize) != 0
+                {
+                    self.parity[state] = -self.main[state];
+                } else {
+                    self.parity[state] = self.main[state];
+                }
+            }
+        }
+
+        self.reset_parity_layer();
+    }
+
+    fn controlled_x(&mut self, control_qubit: u32, target_qubit: u32) {
+        for state in 0..self.main.len() {
+            if self.main[state] != Complex::new(0.0, 0.0) {
+                if state & Self::mask(control_qubit as usize) != 0 {
+                    let target_state: usize = state ^ Self::mask(target_qubit as usize);
+                    self.parity[target_state] = self.main[state];
+                } else {
+                    self.parity[state] = self.main[state];
+                }
+            }
+        }
+
+        self.reset_parity_layer();
+    }
+
+    fn s_gate(&mut self, target_qubit: u32) {
+        for state in 0..self.main.len() {
+            if self.main[state] != Complex::new(0.0, 0.0) {
+                if state & Self::mask(target_qubit as usize) != 0 {
+                    self.parity[state] = Complex::new(0.0, 1.0) * self.main[state];
+                } else {
+                    self.parity[state] = self.main[state];
+                }
+            }
+        }
+
+        self.reset_parity_layer();
+    }
+
+    fn t_gate(&mut self, target_qubit: u32) {
+        let t_const = Complex::from_polar(1.0, std::f64::consts::FRAC_PI_4);
+        for state in 0..self.main.len() {
+            if self.main[state] != Complex::new(0.0, 0.0) {
+                if state & Self::mask(target_qubit as usize) != 0 {
+                    self.parity[state] = t_const * self.main[state];
+                } else {
+                    self.parity[state] = self.main[state];
+                }
+            }
+        }
+
+        self.reset_parity_layer();
     }
 
     fn hadamard(&mut self, target_qubit: u32) {
@@ -542,7 +558,7 @@ impl fmt::Debug for QubitLayer {
         for index_main in 0..self.main.len() {
             writeln!(
                 &mut output,
-                "state {:b} -> {}",
+                "|{:b}>\t -> {}",
                 index_main, self.main[index_main]
             )?;
         }
@@ -647,6 +663,149 @@ impl AddAssign<&QubitLayer> for QubitLayer {
 impl AddAssign for QubitLayer {
     fn add_assign(&mut self, rhs: Self) {
         *self += &rhs;
+    }
+}
+
+impl DivAssign<u32> for QubitLayer {
+    fn div_assign(&mut self, rhs: u32) {
+        assert_ne!(rhs, 0, "Cannot divide QubitLayer by zero");
+
+        let scale = f64::from(rhs);
+        for amplitude in &mut self.main {
+            *amplitude /= scale;
+        }
+
+        for amplitude in &mut self.parity {
+            *amplitude /= scale;
+        }
+    }
+}
+
+/// Quantum Assembly parser.
+/// Supports a simple subset of `OpenQASM` 3.0 (<https://openqasm.com/versions/3.0/index.html>)
+pub mod openq3_parser {
+    use crate::QInstruct;
+    use crate::QInstructs;
+    use crate::QuantumOp;
+    use crate::SingleCtrlQubitOp;
+    use crate::TargetQubit;
+    use crate::TwoCtrlQubitOp;
+
+    pub struct ParsedInstruct {
+        pub num_qubits: u32,
+        pub ops: QInstructs,
+    }
+
+    /// Parses the contents of a qasm file
+    ///
+    /// # Errors
+    /// Returns error if encounters semantic errors in the qasm file contents
+    pub fn parse(file_contents: &str) -> Result<ParsedInstruct, String> {
+        // create a vector of strings split by newline
+        let mut lines: Vec<String> = file_contents
+            .split('\n')
+            .map(std::borrow::ToOwned::to_owned)
+            .collect();
+
+        // find qreg declaration line
+        let Some(remove_delim) = lines.iter().position(|line| line.contains("qreg")) else {
+            return Err("Failed to parse the number of qubits!".to_owned());
+        };
+
+        // Parse the number of qubits
+        let num_qubits: String = lines[remove_delim]
+            .chars()
+            .filter(|&c| c.is_numeric())
+            .collect();
+        let Ok(num_qubits) = num_qubits.parse::<u32>() else {
+            return Err("Failed to parse the number of qubits!".to_owned());
+        };
+
+        // remove all lines before and including qreg
+        lines.drain(0..=remove_delim);
+
+        // Filter each newline
+        let mut parsed_instructions: QInstructs = vec![];
+        for line in &lines {
+            let operation: &str = match line.split_whitespace().next() {
+                Some(operation) => operation,
+                None => continue,
+            };
+
+            let filtered_line: String = line
+                .chars()
+                .map(|c| if c.is_ascii_digit() { c } else { ' ' })
+                .collect();
+            let qubits: Vec<u32> = filtered_line
+                .split_whitespace()
+                .filter_map(|x| x.parse::<u32>().ok())
+                .collect();
+
+            if operation == "cx" || operation == "cz" {
+                if qubits.len() != 2 {
+                    return Err("Failed to parse control and target qubits!".to_owned());
+                }
+
+                let op = if operation == "cx" {
+                    SingleCtrlQubitOp::ControlledX
+                } else {
+                    SingleCtrlQubitOp::ControlledZ
+                };
+
+                parsed_instructions.push(QInstruct::SingleCtrl((op, qubits[0], qubits[1])));
+                continue;
+            }
+
+            if operation == "ccx" {
+                if qubits.len() != 3 {
+                    return Err("Failed to parse two controls and target qubits!".to_owned());
+                }
+
+                parsed_instructions.push(QInstruct::TwoCtrl((
+                    TwoCtrlQubitOp::Toffoli,
+                    qubits[0],
+                    qubits[1],
+                    qubits[2],
+                )));
+                continue;
+            }
+
+            // parse qubit target list
+            let target_qubits: TargetQubit = match operation {
+                // fetch the only target qubit after the op string
+                "x" | "y" | "z" | "h" | "s" | "t" | "sx" | "sy" => {
+                    let Some(&target) = qubits.first() else {
+                        return Err("Failed to parse the target qubit!".to_owned());
+                    };
+                    target
+                }
+
+                _ => {
+                    // trace!("Skipping unknown operation {}", other);
+                    continue;
+                }
+            };
+
+            // parse operation codes
+            let operation: QuantumOp = match operation {
+                "x" => QuantumOp::PauliX,
+                "y" => QuantumOp::PauliY,
+                "z" => QuantumOp::PauliZ,
+                "h" => QuantumOp::Hadamard,
+                "s" => QuantumOp::S,
+                "t" => QuantumOp::T,
+                "sx" => QuantumOp::SX,
+                "sy" => QuantumOp::SY,
+                other => return Err(format!("Operation Code {other} not recognized!")),
+            };
+
+            parsed_instructions.push(QInstruct::Single((operation, target_qubits)));
+        }
+
+        Ok(ParsedInstruct {
+            num_qubits,
+            ops: parsed_instructions,
+        })
     }
 }
 
