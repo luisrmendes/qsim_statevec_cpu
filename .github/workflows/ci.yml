@@ -44,7 +44,7 @@ jobs:
           functional_tests/.venv/bin/python -m pip install --upgrade pip
           functional_tests/.venv/bin/python -m pip install qiskit
       - name: Compare qsim_statevec_cpu output with Qiskit
-        run: python ./functional_tests/validate_with_qiskit.py
+        run: python ./functional_tests/run_functional_tests.py
 
   security_audit:
     name: Security Audit
