@@ -19,5 +19,4 @@ fn main() {
 
     let res = layer.measure_qubits();
     println!("{res:?}");
-
 }
