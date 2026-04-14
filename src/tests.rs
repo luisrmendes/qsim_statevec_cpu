@@ -651,8 +651,7 @@ mod qubitlayer_tests {
         let prep_result = q_layer.execute_noiseless(&prep);
         assert!(prep_result.is_ok());
 
-        let cy_result =
-            q_layer.execute_noiseless(&[(SingleCtrlQubitOp::ControlledY, 1, 0)]);
+        let cy_result = q_layer.execute_noiseless(&[(SingleCtrlQubitOp::ControlledY, 1, 0)]);
         assert!(cy_result.is_ok());
 
         let expected = vec![
