@@ -41,7 +41,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Run tests
-        run: FRONTEND_PRODUCTION_URL=$FRONTEND_PRODUCTION_URL cargo test  
+        run: FRONTEND_PRODUCTION_URL=$FRONTEND_PRODUCTION_URL cargo test
 
   # coverage:
   #   name: Code coverage

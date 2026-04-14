@@ -1,0 +1,104 @@
+{
+  "cases": [
+    {
+      "name": "pauli_x_all",
+      "num_qubits": 3,
+      "instructions": [
+        { "op": "x", "qubits": [0] },
+        { "op": "x", "qubits": [1] },
+        { "op": "x", "qubits": [2] }
+      ]
+    },
+    {
+      "name": "hadamard_all",
+      "num_qubits": 3,
+      "instructions": [
+        { "op": "h", "qubits": [0] },
+        { "op": "h", "qubits": [1] },
+        { "op": "h", "qubits": [2] }
+      ]
+    },
+    {
+      "name": "pauli_z_via_h",
+      "num_qubits": 3,
+      "instructions": [
+        { "op": "h", "qubits": [0] },
+        { "op": "z", "qubits": [0] },
+        { "op": "h", "qubits": [0] }
+      ]
+    },
+    {
+      "name": "s_twice_via_h",
+      "num_qubits": 3,
+      "instructions": [
+        { "op": "h", "qubits": [0] },
+        { "op": "s", "qubits": [0] },
+        { "op": "s", "qubits": [0] },
+        { "op": "h", "qubits": [0] }
+      ]
+    },
+    {
+      "name": "t_four_times_via_h",
+      "num_qubits": 3,
+      "instructions": [
+        { "op": "h", "qubits": [0] },
+        { "op": "t", "qubits": [0] },
+        { "op": "t", "qubits": [0] },
+        { "op": "t", "qubits": [0] },
+        { "op": "t", "qubits": [0] },
+        { "op": "h", "qubits": [0] }
+      ]
+    },
+    {
+      "name": "sx_twice",
+      "num_qubits": 3,
+      "instructions": [
+        { "op": "sx", "qubits": [0] },
+        { "op": "sx", "qubits": [0] }
+      ]
+    },
+    {
+      "name": "sy_twice",
+      "num_qubits": 3,
+      "instructions": [
+        { "op": "sy", "qubits": [0] },
+        { "op": "sy", "qubits": [0] }
+      ]
+    },
+    {
+      "name": "bell_pair",
+      "num_qubits": 3,
+      "instructions": [
+        { "op": "h", "qubits": [0] },
+        { "op": "cx", "qubits": [0, 1] }
+      ]
+    },
+    {
+      "name": "cx_activation",
+      "num_qubits": 3,
+      "instructions": [
+        { "op": "x", "qubits": [0] },
+        { "op": "cx", "qubits": [0, 1] }
+      ]
+    },
+    {
+      "name": "cz_kickback",
+      "num_qubits": 3,
+      "instructions": [
+        { "op": "x", "qubits": [1] },
+        { "op": "h", "qubits": [0] },
+        { "op": "cz", "qubits": [0, 1] },
+        { "op": "h", "qubits": [0] }
+      ]
+    },
+    {
+      "name": "toffoli_activation",
+      "num_qubits": 3,
+      "instructions": [
+        { "op": "x", "qubits": [0] },
+        { "op": "x", "qubits": [1] },
+        { "op": "ccx", "qubits": [0, 1, 2] }
+      ]
+    }
+  ]
+}

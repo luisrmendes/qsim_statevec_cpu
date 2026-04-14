@@ -391,6 +391,8 @@ dependencies = [
  "num",
  "rand",
  "rayon",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

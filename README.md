@@ -28,6 +28,14 @@ The following gate operations are implemented:
 
 ## Dev Notes
 
+### Functional Tests
+
+Validate the output of the simulator with results from Qiskit.
+
+```sh
+./functional_tests/validate_with_qiskit.py
+```
+
 ### Git hooks
 
 This repository includes a pre-commit hook in `.githooks/pre-commit` that runs:

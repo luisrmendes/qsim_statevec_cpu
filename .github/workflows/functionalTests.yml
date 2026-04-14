@@ -1,0 +1,22 @@
+name: Functional Tests
+
+on: [push, pull_request]
+
+jobs:
+  functional_test:
+    name: Functional Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Set up functional test environment
+        run: |
+          python -m venv functional_tests/.venv
+          functional_tests/.venv/bin/python -m pip install --upgrade pip
+          functional_tests/.venv/bin/python -m pip install qiskit
+      - name: Compare qsim_statevec_cpu output with Qiskit
+        run: python ./functional_tests/validate_with_qiskit.py
