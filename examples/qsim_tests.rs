@@ -1,23 +1,7 @@
-use qsim_statevec_cpu::{QInstruct, QuantumOp, QubitLayer, SingleCtrlQubitOp, TwoCtrlQubitOp};
-use serde::Deserialize;
-
-#[derive(Deserialize)]
-struct CircuitSuite {
-    cases: Vec<CircuitCase>,
-}
-
-#[derive(Deserialize)]
-struct CircuitCase {
-    name: String,
-    num_qubits: u32,
-    instructions: Vec<Instruction>,
-}
-
-#[derive(Deserialize)]
-struct Instruction {
-    op: String,
-    qubits: Vec<u32>,
-}
+use qsim_statevec_cpu::openq3_parser;
+use qsim_statevec_cpu::QubitLayer;
+use std::fs;
+use std::path::Path;
 
 fn format_probability(value: f64) -> String {
     let rounded_int = value.round();
@@ -44,7 +28,13 @@ fn format_measurements(measured: &[f64]) -> String {
         .join(",")
 }
 
-fn run_case(name: &str, num_qubits: u32, instructions: Vec<QInstruct>) {
+fn run_case(name: &str, qasm_contents: &str) {
+    let parsed = openq3_parser::parse(qasm_contents)
+        .unwrap_or_else(|error| panic!("{name} should parse without errors: {error}"));
+
+    let num_qubits = parsed.num_qubits;
+    let instructions = parsed.ops;
+
     let mut layer = QubitLayer::new(num_qubits);
     layer
         .execute_noiseless(&instructions)
@@ -54,40 +44,31 @@ fn run_case(name: &str, num_qubits: u32, instructions: Vec<QInstruct>) {
     println!("{name}={}", format_measurements(&measured));
 }
 
-fn build_instruction(instruction: Instruction) -> Result<QInstruct, String> {
-    match (instruction.op.as_str(), instruction.qubits.as_slice()) {
-        ("x", [target]) => Ok((QuantumOp::PauliX, *target).into()),
-        ("z", [target]) => Ok((QuantumOp::PauliZ, *target).into()),
-        ("h", [target]) => Ok((QuantumOp::Hadamard, *target).into()),
-        ("s", [target]) => Ok((QuantumOp::S, *target).into()),
-        ("t", [target]) => Ok((QuantumOp::T, *target).into()),
-        ("sx", [target]) => Ok((QuantumOp::SX, *target).into()),
-        ("sy", [target]) => Ok((QuantumOp::SY, *target).into()),
-        ("cx", [control, target]) => Ok((SingleCtrlQubitOp::ControlledX, *control, *target).into()),
-        ("cz", [control, target]) => Ok((SingleCtrlQubitOp::ControlledZ, *control, *target).into()),
-        ("ccx", [control1, control2, target]) => {
-            Ok((TwoCtrlQubitOp::Toffoli, *control1, *control2, *target).into())
-        }
-        _ => Err(format!(
-            "unsupported instruction op='{}' qubits={:?}",
-            instruction.op, instruction.qubits
-        )),
-    }
-}
-
 fn main() {
-    let suite: CircuitSuite =
-        serde_json::from_str(include_str!("../functional_tests/reference_circuits.json"))
-            .expect("reference_circuits.json must be valid JSON");
+    let circuits_dir = Path::new("functional_tests/reference_qasm");
+    let mut qasm_files = fs::read_dir(circuits_dir)
+        .unwrap_or_else(|error| panic!("failed to read {}: {error}", circuits_dir.display()))
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().is_some_and(|ext| ext == "openqasm"))
+        .collect::<Vec<_>>();
 
-    for case in suite.cases {
-        let instructions = case
-            .instructions
-            .into_iter()
-            .map(build_instruction)
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap_or_else(|error| panic!("{} has invalid instructions: {error}", case.name));
+    qasm_files.sort();
 
-        run_case(&case.name, case.num_qubits, instructions);
+    assert!(
+        !qasm_files.is_empty(),
+        "no .openqasm files found in {}",
+        circuits_dir.display()
+    );
+
+    for qasm_file in qasm_files {
+        let name = qasm_file
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .unwrap_or_else(|| panic!("invalid file name: {}", qasm_file.display()));
+        let qasm_contents = fs::read_to_string(&qasm_file)
+            .unwrap_or_else(|error| panic!("failed to read {}: {error}", qasm_file.display()));
+
+        run_case(name, &qasm_contents);
     }
 }

@@ -1,8 +1,6 @@
-import json
 from pathlib import Path
 
 from qiskit import QuantumCircuit
-from qiskit.circuit.library import YGate
 from qiskit.quantum_info import Statevector
 
 
@@ -22,40 +20,12 @@ def format_measurements(qc: QuantumCircuit, num_qubits: int) -> str:
     return ",".join(format_probability(value) for value in qubit_probs)
 
 
-def apply_instruction(qc: QuantumCircuit, instruction: dict) -> None:
-    op = instruction["op"]
-    qubits = instruction["qubits"]
+circuits_dir = Path(__file__).with_name("reference_qasm")
+qasm_files = sorted(circuits_dir.glob("*.openqasm"))
 
-    if op == "x" and len(qubits) == 1:
-        qc.x(qubits[0])
-    elif op == "z" and len(qubits) == 1:
-        qc.z(qubits[0])
-    elif op == "h" and len(qubits) == 1:
-        qc.h(qubits[0])
-    elif op == "s" and len(qubits) == 1:
-        qc.s(qubits[0])
-    elif op == "t" and len(qubits) == 1:
-        qc.t(qubits[0])
-    elif op == "sx" and len(qubits) == 1:
-        qc.sx(qubits[0])
-    elif op == "sy" and len(qubits) == 1:
-        qc.append(YGate().power(0.5), [qubits[0]])
-    elif op == "cx" and len(qubits) == 2:
-        qc.cx(qubits[0], qubits[1])
-    elif op == "cz" and len(qubits) == 2:
-        qc.cz(qubits[0], qubits[1])
-    elif op == "ccx" and len(qubits) == 3:
-        qc.ccx(qubits[0], qubits[1], qubits[2])
-    else:
-        raise ValueError(f"Unsupported instruction: {instruction}")
+if not qasm_files:
+    raise FileNotFoundError(f"No QASM files found in {circuits_dir}")
 
-
-circuits_file = Path(__file__).with_name("reference_circuits.json")
-with circuits_file.open("r", encoding="utf-8") as handle:
-    circuits_data = json.load(handle)
-
-for case in circuits_data["cases"]:
-    qc = QuantumCircuit(case["num_qubits"])
-    for instruction in case["instructions"]:
-        apply_instruction(qc, instruction)
-    print(f"{case['name']}={format_measurements(qc, case['num_qubits'])}")
+for qasm_file in qasm_files:
+    qc = QuantumCircuit.from_qasm_file(str(qasm_file))
+    print(f"{qasm_file.stem}={format_measurements(qc, qc.num_qubits)}")
