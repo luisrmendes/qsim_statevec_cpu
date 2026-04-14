@@ -375,8 +375,8 @@ impl QubitLayer {
 
     fn sqrt_pauli_y(&mut self, target_qubit: u32) {
         let const_same_state = Complex::new(0.5, 0.5);
-        let const_zero_to_one = Complex::new(-0.5, -0.5);
-        let const_one_to_zero = Complex::new(0.5, 0.5);
+        let const_zero_to_one = Complex::new(0.5, 0.5);
+        let const_one_to_zero = Complex::new(-0.5, -0.5);
 
         for state in 0..self.main.len() {
             if self.main[state] != Complex::new(0.0, 0.0) {

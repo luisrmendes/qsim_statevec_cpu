@@ -37,6 +37,7 @@ def main() -> int:
     qiskit_lines = run_command([str(python_bin), str(python_script)], repo_root).splitlines()
 
     all_passed = True
+    failing_tests = []
     print("Test results (Qiskit vs qsim_statevec_cpu):\n")
     GREEN = "\033[92m"
     RED = "\033[91m"
@@ -54,12 +55,17 @@ def main() -> int:
         else:
             print(f"  Result:           {RED}FAIL{RESET}")
             all_passed = False
+            failing_tests.append((qiskit_name, qiskit_result, qsim_result))
 
     if all_passed:
         print("\nAll tests passed: qsim_statevec_cpu output matches Qiskit for all reference circuits.")
         return 0
     else:
         print("\nSome tests failed: see above for mismatches.", file=sys.stderr)
+        print("\nFailing tests summary:")
+        print(f"{BOLD}{'Test Name':<25} {'Qiskit':<20} {'qsim_statevec_cpu':<20}{RESET}")
+        for name, qiskit_result, qsim_result in failing_tests:
+            print(f"{name:<25} {qiskit_result:<20} {qsim_result:<20}")
         return 1
 
 
