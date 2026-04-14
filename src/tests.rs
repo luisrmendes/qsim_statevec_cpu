@@ -567,7 +567,7 @@ mod qubitlayer_tests {
         let result = q_layer.execute_noiseless(&[(QuantumOp::SY, 0)]);
         assert!(result.is_ok());
 
-        let expected = vec![Complex::new(0.5, 0.5), Complex::new(-0.5, -0.5)];
+        let expected = vec![Complex::new(0.5, 0.5), Complex::new(0.5, 0.5)];
         assert_eq!(expected, q_layer.main);
     }
 
@@ -578,7 +578,7 @@ mod qubitlayer_tests {
         let result = q_layer.execute_noiseless(&[(QuantumOp::SY, 0), (QuantumOp::SY, 0)]);
         assert!(result.is_ok());
 
-        let expected = vec![Complex::new(0.0, 0.0), Complex::new(0.0, -1.0)];
+        let expected = vec![Complex::new(0.0, 0.0), Complex::new(0.0, 1.0)];
         assert_eq!(expected, q_layer.main);
     }
 
