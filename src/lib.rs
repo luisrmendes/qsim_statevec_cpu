@@ -32,7 +32,7 @@
 
 use num::pow;
 use num::Complex;
-use rand::Rng;
+use rand::RngExt;
 use std::fmt;
 use std::fmt::Write;
 use std::ops::Add;
@@ -143,7 +143,7 @@ impl QubitLayer {
             return Err("Number of shots must be greater than 0".to_owned());
         }
 
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let mut accumulated_qubit_layer = QubitLayer::new(self.get_num_qubits());
         accumulated_qubit_layer.main[0] = Complex::new(0.0, 0.0);
 
@@ -153,8 +153,8 @@ impl QubitLayer {
             for instruction in quantum_instructions.iter().cloned() {
                 let target_qubit = qubit_layer.execute_instruction(instruction.into())?;
 
-                if rng.gen::<f64>() < noise_model.gate_error_prob {
-                    match rng.gen_range(0..3) {
+                if rng.random::<f64>() < noise_model.gate_error_prob {
+                    match rng.random_range(0..3) {
                         0 => qubit_layer.pauli_x(target_qubit),
                         1 => qubit_layer.pauli_y(target_qubit),
                         _ => qubit_layer.pauli_z(target_qubit),
@@ -163,7 +163,7 @@ impl QubitLayer {
             }
 
             for qubit in 0..self.get_num_qubits() {
-                if rng.gen::<f64>() < noise_model.readout_flip_prob {
+                if rng.random::<f64>() < noise_model.readout_flip_prob {
                     qubit_layer.pauli_x(qubit);
                 }
             }
