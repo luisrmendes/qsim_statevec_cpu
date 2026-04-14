@@ -610,6 +610,61 @@ mod qubitlayer_tests {
     }
 
     #[test]
+    fn test_controlled_y_simple() {
+        let num_qubits = 2;
+        let mut q_layer: QubitLayer = QubitLayer::new(num_qubits);
+
+        q_layer.pauli_x(1);
+        q_layer.controlled_y(1, 0);
+
+        let expected = vec![
+            Complex::new(0.0, 0.0),
+            Complex::new(0.0, 0.0),
+            Complex::new(0.0, 0.0),
+            Complex::new(0.0, 1.0),
+        ];
+        assert_eq!(expected, q_layer.main);
+    }
+
+    #[test]
+    fn test_controlled_y_no_change_when_control_inactive() {
+        let num_qubits = 2;
+        let mut q_layer: QubitLayer = QubitLayer::new(num_qubits);
+
+        q_layer.pauli_x(0);
+        q_layer.controlled_y(1, 0);
+
+        let expected = vec![
+            Complex::new(0.0, 0.0),
+            Complex::new(1.0, 0.0),
+            Complex::new(0.0, 0.0),
+            Complex::new(0.0, 0.0),
+        ];
+        assert_eq!(expected, q_layer.main);
+    }
+
+    #[test]
+    fn test_execute_noiseless_controlled_y_instruction() {
+        let mut q_layer: QubitLayer = QubitLayer::new(2);
+
+        let prep = vec![(QuantumOp::PauliX, 1)];
+        let prep_result = q_layer.execute_noiseless(&prep);
+        assert!(prep_result.is_ok());
+
+        let cy_result =
+            q_layer.execute_noiseless(&[(SingleCtrlQubitOp::ControlledY, 1, 0)]);
+        assert!(cy_result.is_ok());
+
+        let expected = vec![
+            Complex::new(0.0, 0.0),
+            Complex::new(0.0, 0.0),
+            Complex::new(0.0, 0.0),
+            Complex::new(0.0, 1.0),
+        ];
+        assert_eq!(expected, q_layer.main);
+    }
+
+    #[test]
     fn test_toffoli_simple() {
         let num_qubits = 3;
         let mut q_layer: QubitLayer = QubitLayer::new(num_qubits);
@@ -753,6 +808,20 @@ mod parser_tests {
         assert_eq!(
             QInstruct::SingleCtrl((SingleCtrlQubitOp::ControlledZ, 2, 3)),
             parsed.ops[6]
+        );
+    }
+
+    #[test]
+    fn parse_controlled_y_op() {
+        let qasm = "qreg q[2];\ncy q[0],q[1];";
+
+        let parsed = openq3_parser::parse(qasm).expect("parser should parse cy qasm");
+
+        assert_eq!(2, parsed.num_qubits);
+        assert_eq!(1, parsed.ops.len());
+        assert_eq!(
+            QInstruct::SingleCtrl((SingleCtrlQubitOp::ControlledY, 0, 1)),
+            parsed.ops[0]
         );
     }
 

@@ -14,27 +14,20 @@ Memory consumption is 8 *2* 2<sup>`num_qubits`</sup> bytes. For example, simulat
 
 The following gate operations are implemented:
 
-- Pauli X gate
-- Pauli Y gate
-- Pauli Z gate
-- Hadamard gate
-- T gate
-- S gate
-- Controlled X gate
-- Controlled Y gate
-- Toffoli gate
-- Sqrt Pauli X gate
-- Sqrt Pauli Y gate
+- Pauli X
+- Pauli Y
+- Pauli Z
+- Hadamard
+- T
+- S
+- Controlled X
+- Controlled Y
+- Controlled Z
+- Toffoli
+- Sqrt Pauli X
+- Sqrt Pauli Y
 
 ## Dev Notes
-
-### Functional Tests
-
-Validate the output of the simulator with results from Qiskit.
-
-```sh
-./functional_tests/validate_with_qiskit.py
-```
 
 ### Git hooks
 

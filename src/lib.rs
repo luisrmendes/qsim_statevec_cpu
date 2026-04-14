@@ -58,6 +58,7 @@ pub type QuantumOp = SingleQubitOp;
 #[derive(Clone, PartialEq, Debug)]
 pub enum SingleCtrlQubitOp {
     ControlledX,
+    ControlledY,
     ControlledZ,
 }
 
@@ -248,6 +249,9 @@ impl QubitLayer {
                     SingleCtrlQubitOp::ControlledX => {
                         self.controlled_x(control_qubit, target_qubit);
                     }
+                    SingleCtrlQubitOp::ControlledY => {
+                        self.controlled_y(control_qubit, target_qubit);
+                    }
                     SingleCtrlQubitOp::ControlledZ => {
                         self.controlled_z(control_qubit, target_qubit);
                     }
@@ -419,6 +423,25 @@ impl QubitLayer {
                     && state & Self::mask(target_qubit as usize) != 0
                 {
                     self.parity[state] = -self.main[state];
+                } else {
+                    self.parity[state] = self.main[state];
+                }
+            }
+        }
+
+        self.reset_parity_layer();
+    }
+
+    fn controlled_y(&mut self, control_qubit: u32, target_qubit: u32) {
+        for state in 0..self.main.len() {
+            if self.main[state] != Complex::new(0.0, 0.0) {
+                if state & Self::mask(control_qubit as usize) != 0 {
+                    let target_state: usize = state ^ Self::mask(target_qubit as usize);
+                    if state & Self::mask(target_qubit as usize) == 0 {
+                        self.parity[target_state] = self.main[state] * Complex::new(0.0, 1.0);
+                    } else {
+                        self.parity[target_state] = self.main[state] * Complex::new(0.0, -1.0);
+                    }
                 } else {
                     self.parity[state] = self.main[state];
                 }
@@ -741,13 +764,15 @@ pub mod openq3_parser {
                 .filter_map(|x| x.parse::<u32>().ok())
                 .collect();
 
-            if operation == "cx" || operation == "cz" {
+            if operation == "cx" || operation == "cy" || operation == "cz" {
                 if qubits.len() != 2 {
                     return Err("Failed to parse control and target qubits!".to_owned());
                 }
 
                 let op = if operation == "cx" {
                     SingleCtrlQubitOp::ControlledX
+                } else if operation == "cy" {
+                    SingleCtrlQubitOp::ControlledY
                 } else {
                     SingleCtrlQubitOp::ControlledZ
                 };
