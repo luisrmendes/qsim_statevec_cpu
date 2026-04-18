@@ -1,4 +1,4 @@
-// Multi-operation test on 5 qubits with mixed controls
+// Multi-operation test on 3 qubits with mixed controls
 OPENQASM 3.0;
 include "stdgates.inc";
 

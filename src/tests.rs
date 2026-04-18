@@ -8,7 +8,7 @@ mod openqasm_tests {
     fn misc1_3_qubits() {
         let filename = "misc1_3_qubits.openqasm";
         let qasm = std::fs::read_to_string(format!("qasm_files/{filename}"))
-            .expect("should read {filename}");
+            .expect(&format!("should read {filename}"));
 
         let parsed = openq3_parser::parse(&qasm).expect("parser should parse cx qasm");
         let mut q_layer = QubitLayer::new(parsed.num_qubits);
@@ -26,7 +26,7 @@ mod openqasm_tests {
     fn misc1_4_qubits() {
         let filename = "misc1_4_qubits.openqasm";
         let qasm = std::fs::read_to_string(format!("qasm_files/{filename}"))
-            .expect("should read {filename}");
+            .expect(&format!("should read {filename}"));
 
         let parsed = openq3_parser::parse(&qasm).expect("parser should parse cx qasm");
         let mut q_layer = QubitLayer::new(parsed.num_qubits);
@@ -45,7 +45,7 @@ mod openqasm_tests {
     fn misc1_5_qubits() {
         let filename = "misc1_5_qubits.openqasm";
         let qasm = std::fs::read_to_string(format!("qasm_files/{filename}"))
-            .expect("should read {filename}");
+            .expect(&format!("should read {filename}"));
 
         let parsed = openq3_parser::parse(&qasm).expect("parser should parse cx qasm");
         let mut q_layer = QubitLayer::new(parsed.num_qubits);
