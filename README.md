@@ -1,10 +1,10 @@
-# qsim_statevec_cpu
+# Quantum Simulator State Vector
 
 <!-- Workflow status badges -->
 [![CI](https://github.com/luisrmendes/qsim_statevec_cpu/actions/workflows/ci.yml/badge.svg?event=push&job=code_checks)](https://github.com/luisrmendes/qsim_statevec_cpu/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT_OR_Apache--2.0-blue.svg)](https://github.com/luisrmendes/qsim_statevec_cpu#license)
 [![Cargo](https://img.shields.io/crates/v/quantum_state_sim.svg)](https://docs.rs/quantum_state_sim/0.1.0/quantum_state_sim/)
-[![Rust 1.70](https://img.shields.io/badge/rust-1.95-lightgray.svg)](
+[![Rust 1.95](https://img.shields.io/badge/rust-1.95-lightgray.svg)](
 https://www.rust-lang.org)
 [![Documentation](https://docs.rs/quantum_state_sim/badge.svg)](https://docs.rs/quantum_state_sim/0.1.0/quantum_state_sim/)
 
