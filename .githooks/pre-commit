@@ -10,4 +10,7 @@ cargo check
 echo "[pre-commit] Running cargo test..."
 cargo test -q
 
+echo "[pre-commit] Running functional test..."
+./functional_tests/run_functional_tests.py
+
 echo "[pre-commit] All checks passed."

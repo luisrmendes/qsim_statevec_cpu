@@ -31,12 +31,7 @@ The following gate operations are implemented:
 
 ### Git hooks
 
-This repository includes a pre-commit hook in `.githooks/pre-commit` that runs:
-
-- `cargo fmt -- --check`
-- `cargo check`
-- `cargo test -q`
-
+This repository includes a pre-commit hook in `.githooks/pre-commit` that runs multiple checks.  
 To enable it:
 
 ```bash
