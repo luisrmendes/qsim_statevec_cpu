@@ -12,7 +12,7 @@ This provides a quantum simulation abstraction tool to simulate quantum circuits
 Uses the state vector simulation method.  
 Memory consumption is 8 * 2 * 2<sup>`num_qubits`</sup> bytes. For example, simulating 25 qubits costs ~537 MB.  
 
-The following gate operations are implemented:
+Implemented gate operations:
 
 - Pauli X
 - Pauli Y
@@ -26,6 +26,9 @@ The following gate operations are implemented:
 - Toffoli
 - Sqrt Pauli X
 - Sqrt Pauli Y
+
+## Documentation and Examples
+https://docs.rs/quantum_state_sim/0.1.0/quantum_state_sim/
 
 ## Dev Notes
 
