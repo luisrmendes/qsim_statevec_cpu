@@ -40,7 +40,8 @@ fn main() {
     println!("Measured probabilities: {:?}", layer.measure_qubits());
 }
 
-fn map_gate_to_instruction(gate_name: &str, qubits: &[u32]) -> Result<QInstruct, String> {    match (gate_name, qubits) {
+fn map_gate_to_instruction(gate_name: &str, qubits: &[u32]) -> Result<QInstruct, String> {
+    match (gate_name, qubits) {
         ("x", [q]) => Ok(QInstruct::Single((QuantumOp::PauliX, *q))),
         ("y", [q]) => Ok(QInstruct::Single((QuantumOp::PauliY, *q))),
         ("z", [q]) => Ok(QInstruct::Single((QuantumOp::PauliZ, *q))),
@@ -71,4 +72,3 @@ fn map_gate_to_instruction(gate_name: &str, qubits: &[u32]) -> Result<QInstruct,
         )),
     }
 }
-
