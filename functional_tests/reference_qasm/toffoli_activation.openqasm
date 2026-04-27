@@ -1,0 +1,7 @@
+OPENQASM 2.0;
+include "qelib1.inc";
+gate sy a { ry(pi/2) a; }
+qreg q[3];
+x q[0];
+x q[1];
+ccx q[0],q[1],q[2];
