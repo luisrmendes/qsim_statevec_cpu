@@ -13,4 +13,7 @@ cargo test -q
 echo "[pre-commit] Running functional test..."
 ./functional_tests/run_functional_tests.py
 
+echo "[pre-commit] Running Check Advisory..."
+cargo deny check advisories
+
 echo "[pre-commit] All checks passed."
