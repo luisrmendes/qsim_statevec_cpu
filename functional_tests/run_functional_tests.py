@@ -29,9 +29,11 @@ def main() -> int:
     python_script = script_dir / "qiskit_tests.py"
 
     if not python_bin.exists() or not python_bin.is_file() or not python_bin.stat().st_mode & 0o111:
-        print("ERROR: qiskit_tests virtual environment is missing or not executable.", file=sys.stderr)
-        print("Create it first and install qiskit inside qiskit_tests/.venv.", file=sys.stderr)
-        return 1
+        print("Virtual environment not found. Creating it and installing qiskit...")
+        venv_dir = script_dir / ".venv"
+        subprocess.run([sys.executable, "-m", "venv", str(venv_dir)], check=True)
+        pip_bin = venv_dir / "bin" / "pip"
+        subprocess.run([str(pip_bin), "install", "qiskit"], check=True)
 
     qsim_lines = run_command(["cargo", "run", "--quiet", "--example", "qsim_tests"], repo_root).splitlines()
     qiskit_lines = run_command([str(python_bin), str(python_script)], repo_root).splitlines()
