@@ -244,6 +244,11 @@ impl QubitLayer {
                         self.get_num_qubits()
                     ));
                 }
+                if target_qubit == control_qubit {
+                    return Err(format!(
+                        "Target qubit and control qubit are the same: {target_qubit:?}"
+                    ));
+                }
 
                 match op {
                     SingleCtrlQubitOp::ControlledX => {
@@ -276,6 +281,16 @@ impl QubitLayer {
                     return Err(format!(
                         "Target qubit {target_qubit:?} is out of range. Size of layer is {}",
                         self.get_num_qubits()
+                    ));
+                }
+                if target_qubit == control_qubit1 {
+                    return Err(format!(
+                        "Target qubit and control qubit 1 are the same: {target_qubit:?}"
+                    ));
+                }
+                if target_qubit == control_qubit2 {
+                    return Err(format!(
+                        "Target qubit and control qubit2 are the same: {target_qubit:?}"
                     ));
                 }
 
