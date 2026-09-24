@@ -47,7 +47,7 @@ refresh_alias_status() {
 
 load_alias i "curl https://sh.rustup.rs -sSf | sh"
 load_alias b "cargo build"
-load_alias r "cargo run"
+load_alias r "cargo run -p qsim_cli"
 load_alias br "cargo build --release"
 load_alias lint "cargo clippy"
 load_alias lintmore "cargo clippy -- -W clippy::pedantic"

@@ -16,14 +16,17 @@ keywords = ["quantum", "simulator"]
 [dependencies]
 num = "0.4.0"
 rayon = "1.10.0"
-rand = ">=0.10.1"
+rand = "=0.10.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-oq3_semantics = { git = "https://github.com/luisrmendes/openqasm3_parser.git" }
 
 [dev-dependencies]
 criterion = "0.5.1"
+oq3_semantics = { git = "https://github.com/luisrmendes/openqasm3_parser.git" }
 
 [[bench]]
 name = "my_benchmark"
 harness = false
+
+[workspace]
+members = ["cli"]

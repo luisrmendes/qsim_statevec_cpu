@@ -634,6 +634,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "qsim_cli"
+version = "0.1.1"
+dependencies = [
+ "oq3_semantics",
+ "qsim_statevec_cpu",
+]
+
+[[package]]
 name = "qsim_statevec_cpu"
 version = "0.1.1"
 dependencies = [
