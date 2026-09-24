@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+'''
+This file defines functional tests comparing the qsim_statevec_cpu simulator lib against Qiskit's backend simulator
+'''
 from __future__ import annotations
 
 import difflib
