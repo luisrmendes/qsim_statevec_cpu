@@ -290,7 +290,12 @@ impl QubitLayer {
                 }
                 if target_qubit == control_qubit2 {
                     return Err(format!(
-                        "Target qubit and control qubit2 are the same: {target_qubit:?}"
+                        "Target qubit and control qubit 2 are the same: {target_qubit:?}"
+                    ));
+                }
+                if control_qubit1 == control_qubit2 {
+                    return Err(format!(
+                        "Control qubit 1 and 2 are the same: {control_qubit1:?}"
                     ));
                 }
 
