@@ -1,12 +1,15 @@
 use super::*;
 
+use num::pow;
+use num::Complex;
+
 // More extensive functionality tests on quantum gate operations
 mod openqasm_tests {
     use super::*;
 
     fn parse_qasm_file_to_ops(qasm_path: &str) -> (u32, QInstructs) {
-        let circuit = oq3_circuit::parse_circuit_file(qasm_path)
-            .expect("parser should parse OpenQASM file");
+        let circuit =
+            oq3_circuit::parse_circuit_file(qasm_path).expect("parser should parse OpenQASM file");
 
         let ops: QInstructs = circuit
             .gates

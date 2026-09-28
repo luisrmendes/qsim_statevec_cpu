@@ -1,7 +1,6 @@
 use oq3_circuit::parse_circuit_file;
-use qsim_statevec_cpu::{
-    QInstruct, QInstructs, QuantumOp, QubitLayer, SingleCtrlQubitOp, TwoCtrlQubitOp,
-};
+use qsim_statevec_cpu::qubit_layer::QubitLayer;
+use qsim_statevec_cpu::types::*;
 
 fn main() {
     let qasm_path = "qasm_files/Hadamard_10_qubits.qasm";
