@@ -5,7 +5,7 @@ mod openqasm_tests {
     use super::*;
 
     fn parse_qasm_file_to_ops(qasm_path: &str) -> (u32, QInstructs) {
-        let circuit = oq3_semantics::circuit::parse_circuit_file(qasm_path)
+        let circuit = oq3_circuit::parse_circuit_file(qasm_path)
             .expect("parser should parse OpenQASM file");
 
         let ops: QInstructs = circuit

@@ -1,4 +1,4 @@
-use oq3_semantics::circuit::parse_circuit_file;
+use oq3_circuit::parse_circuit_file;
 use qsim_statevec_cpu::{
     QInstruct, QInstructs, QuantumOp, QubitLayer, SingleCtrlQubitOp, TwoCtrlQubitOp,
 };
