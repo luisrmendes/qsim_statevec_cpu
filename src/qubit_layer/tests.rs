@@ -1,12 +1,15 @@
 use super::*;
 
+use num::pow;
+use num::Complex;
+
 // More extensive functionality tests on quantum gate operations
 mod openqasm_tests {
     use super::*;
 
     fn parse_qasm_file_to_ops(qasm_path: &str) -> (u32, QInstructs) {
-        let circuit = oq3_semantics::circuit::parse_circuit_file(qasm_path)
-            .expect("parser should parse OpenQASM file");
+        let circuit =
+            oq3_circuit::parse_circuit_file(qasm_path).expect("parser should parse OpenQASM file");
 
         let ops: QInstructs = circuit
             .gates
@@ -724,5 +727,21 @@ mod qubitlayer_tests {
 
         let result = q_layer.execute_noiseless(&[(TwoCtrlQubitOp::Toffoli, 0, 7, 2)]);
         assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            "Control qubit 7 is out of range. Size of layer is 3"
+        );
+    }
+
+    #[test]
+    fn test_execute_toffoli_with_same_control_qubits() {
+        let mut q_layer: QubitLayer = QubitLayer::new(2);
+
+        let result = q_layer.execute_noiseless(&[(TwoCtrlQubitOp::Toffoli, 0, 1, 1)]);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            "Target qubit and control qubit 2 are the same: 1"
+        );
     }
 }

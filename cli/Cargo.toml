@@ -6,4 +6,4 @@ publish = false
 
 [dependencies]
 qsim_statevec_cpu = { path = ".." }
-oq3_semantics = { git = "https://github.com/luisrmendes/openqasm3_parser.git" }
+oq3_circuit = { git = "https://github.com/luisrmendes/openqasm3_circuit_parser.git" }
