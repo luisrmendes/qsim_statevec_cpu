@@ -42,7 +42,7 @@ jobs:
         run: |
           python -m venv functional_tests/.venv
           functional_tests/.venv/bin/python -m pip install --upgrade pip
-          functional_tests/.venv/bin/python -m pip install qiskit
+          functional_tests/.venv/bin/python -m pip install -r functional_tests/requirements.txt
       - name: Compare qsim_statevec_cpu output with Qiskit
         run: python ./functional_tests/run_functional_tests.py
 
