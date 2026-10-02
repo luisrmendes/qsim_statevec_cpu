@@ -11,7 +11,8 @@ ALIASES=(
   [lint]="Runs linter"
   [lintmore]="Runs linter"
   [cln]="Clean build artifacts"
-  [tst]="Run unit tests"
+  [ut]="Run unit tests"
+  [func]="Run functional tests"
   [tstcv]="Run unit test coverage"
 )
 
@@ -46,11 +47,12 @@ refresh_alias_status() {
 
 load_alias i "curl https://sh.rustup.rs -sSf | sh"
 load_alias b "cargo build"
-load_alias r "cargo run"
+load_alias r "cargo run -p qsim_cli"
 load_alias br "cargo build --release"
 load_alias lint "cargo clippy"
 load_alias lintmore "cargo clippy -- -W clippy::pedantic"
 load_alias cln "cargo clean"
-load_alias tst "cargo test"
+load_alias ut "cargo test"
+load_alias func "./functional_tests/run_functional_tests.py"
 
 refresh_alias_status
