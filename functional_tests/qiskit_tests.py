@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from qiskit import QuantumCircuit
+from qiskit import QuantumCircuit, qasm3
 from qiskit.quantum_info import Statevector
 
 
@@ -27,5 +27,5 @@ if not qasm_files:
     raise FileNotFoundError(f"No QASM files found in {circuits_dir}")
 
 for qasm_file in qasm_files:
-    qc = QuantumCircuit.from_qasm_file(str(qasm_file))
+    qc = qasm3.load(qasm_file)
     print(f"{qasm_file.stem}={format_measurements(qc, qc.num_qubits)}")

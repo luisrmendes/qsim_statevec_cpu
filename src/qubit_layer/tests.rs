@@ -5,9 +5,11 @@ use num::Complex;
 
 // More extensive functionality tests on quantum gate operations
 mod openqasm_tests {
+    use std::path::Path;
+
     use super::*;
 
-    fn parse_qasm_file_to_ops(qasm_path: &str) -> (u32, QInstructs) {
+    fn parse_qasm_file_to_ops(qasm_path: &Path) -> (u32, QInstructs) {
         let circuit =
             oq3_circuit::parse_circuit_file(qasm_path).expect("parser should parse OpenQASM file");
 
@@ -56,7 +58,7 @@ mod openqasm_tests {
 
     #[test]
     fn misc1_3_qubits() {
-        let (num_qubits, ops) = parse_qasm_file_to_ops("qasm_files/misc1_3_qubits.qasm");
+        let (num_qubits, ops) = parse_qasm_file_to_ops(Path::new("qasm_files/misc1_3_qubits.qasm"));
         let mut q_layer = QubitLayer::new(num_qubits);
 
         let result = q_layer.execute_noiseless(&ops);
@@ -70,7 +72,7 @@ mod openqasm_tests {
 
     #[test]
     fn misc1_4_qubits() {
-        let (num_qubits, ops) = parse_qasm_file_to_ops("qasm_files/misc1_4_qubits.qasm");
+        let (num_qubits, ops) = parse_qasm_file_to_ops(Path::new("qasm_files/misc1_4_qubits.qasm"));
         let mut q_layer = QubitLayer::new(num_qubits);
 
         let result = q_layer.execute_noiseless(&ops);
@@ -85,7 +87,7 @@ mod openqasm_tests {
 
     #[test]
     fn misc1_5_qubits() {
-        let (num_qubits, ops) = parse_qasm_file_to_ops("qasm_files/misc1_5_qubits.qasm");
+        let (num_qubits, ops) = parse_qasm_file_to_ops(Path::new("qasm_files/misc1_5_qubits.qasm"));
         let mut q_layer = QubitLayer::new(num_qubits);
 
         let result = q_layer.execute_noiseless(&ops);
@@ -101,7 +103,7 @@ mod openqasm_tests {
 
     #[test]
     fn misc2_3_qubits() {
-        let (num_qubits, ops) = parse_qasm_file_to_ops("qasm_files/misc2_3_qubits.qasm");
+        let (num_qubits, ops) = parse_qasm_file_to_ops(Path::new("qasm_files/misc2_3_qubits.qasm"));
         let mut q_layer = QubitLayer::new(num_qubits);
 
         let result = q_layer.execute_noiseless(&ops);
@@ -115,7 +117,8 @@ mod openqasm_tests {
 
     #[test]
     fn ctrl_x_1_5_qubits() {
-        let (num_qubits, ops) = parse_qasm_file_to_ops("qasm_files/ctrl_x_1_5_qubits.qasm");
+        let (num_qubits, ops) =
+            parse_qasm_file_to_ops(Path::new("qasm_files/ctrl_x_1_5_qubits.qasm"));
         let mut q_layer = QubitLayer::new(num_qubits);
 
         let result = q_layer.execute_noiseless(&ops);
@@ -130,7 +133,8 @@ mod openqasm_tests {
 
     #[test]
     fn ctrl_z_1_5_qubits() {
-        let (num_qubits, ops) = parse_qasm_file_to_ops("qasm_files/ctrl_z_1_5_qubits.qasm");
+        let (num_qubits, ops) =
+            parse_qasm_file_to_ops(Path::new("qasm_files/ctrl_z_1_5_qubits.qasm"));
         let mut q_layer = QubitLayer::new(num_qubits);
 
         let result = q_layer.execute_noiseless(&ops);

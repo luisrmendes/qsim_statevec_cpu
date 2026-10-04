@@ -1,5 +1,5 @@
-use qsim_statevec_cpu::openq3_parser;
-use qsim_statevec_cpu::QubitLayer;
+use oq3_circuit::{parse_circuit_file, GateApplication};
+use qsim_statevec_cpu::{QInstruct, QubitLayer, SingleCtrlQubitOp, SingleQubitOp, TwoCtrlQubitOp};
 use std::fs;
 use std::path::Path;
 
@@ -28,20 +28,23 @@ fn format_measurements(measured: &[f64]) -> String {
         .join(",")
 }
 
-fn run_case(name: &str, qasm_contents: &str) {
-    let parsed = openq3_parser::parse(qasm_contents)
-        .unwrap_or_else(|error| panic!("{name} should parse without errors: {error}"));
-
-    let num_qubits = parsed.num_qubits;
-    let instructions = parsed.ops;
-
-    let mut layer = QubitLayer::new(num_qubits);
-    layer
-        .execute_noiseless(&instructions)
-        .unwrap_or_else(|error| panic!("{name} should execute without errors: {error}"));
-
-    let measured = layer.measure_qubits();
-    println!("{name}={}", format_measurements(&measured));
+// Map instructions gathered from file to qsim_statevec_cpu's `QInstruct` representation.
+fn to_instruction(gate: &GateApplication) -> QInstruct {
+    match (gate.name.as_str(), gate.qubits.as_slice()) {
+        ("x", &[t]) => (SingleQubitOp::PauliX, t).into(),
+        ("y", &[t]) => (SingleQubitOp::PauliY, t).into(),
+        ("z", &[t]) => (SingleQubitOp::PauliZ, t).into(),
+        ("h", &[t]) => (SingleQubitOp::Hadamard, t).into(),
+        ("s", &[t]) => (SingleQubitOp::S, t).into(),
+        ("t", &[t]) => (SingleQubitOp::T, t).into(),
+        ("sx", &[t]) => (SingleQubitOp::SX, t).into(),
+        ("sy", &[t]) => (SingleQubitOp::SY, t).into(),
+        ("cx", &[c, t]) => (SingleCtrlQubitOp::ControlledX, c, t).into(),
+        ("cy", &[c, t]) => (SingleCtrlQubitOp::ControlledY, c, t).into(),
+        ("cz", &[c, t]) => (SingleCtrlQubitOp::ControlledZ, c, t).into(),
+        ("ccx", &[c0, c1, t]) => (TwoCtrlQubitOp::Toffoli, c0, c1, t).into(),
+        _ => panic!("unsupported gate: {gate:?}"),
+    }
 }
 
 fn main() {
@@ -62,13 +65,19 @@ fn main() {
     );
 
     for qasm_file in qasm_files {
-        let name = qasm_file
-            .file_stem()
-            .and_then(|stem| stem.to_str())
-            .unwrap_or_else(|| panic!("invalid file name: {}", qasm_file.display()));
-        let qasm_contents = fs::read_to_string(&qasm_file)
-            .unwrap_or_else(|error| panic!("failed to read {}: {error}", qasm_file.display()));
+        let circuit = parse_circuit_file(&qasm_file)
+            .unwrap_or_else(|error| panic!("failed to parse {}: {error}", qasm_file.display()));
 
-        run_case(name, &qasm_contents);
+        let mut layer = QubitLayer::new(circuit.num_qubits);
+
+        let instructions: Vec<QInstruct> = circuit.gates.iter().map(to_instruction).collect();
+
+        layer
+            .execute_noiseless(&instructions)
+            .unwrap_or_else(|error| panic!("{qasm_file:?} should execute without errors: {error}"));
+
+        let measured = layer.measure_qubits();
+        let name = qasm_file.file_stem().unwrap_or_default().to_string_lossy();
+        println!("{name}={}", format_measurements(&measured));
     }
 }

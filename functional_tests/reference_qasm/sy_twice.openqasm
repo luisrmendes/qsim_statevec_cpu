@@ -1,6 +1,6 @@
-OPENQASM 2.0;
-include "qelib1.inc";
+OPENQASM 3.0;
+include "stdgates.inc";
 gate sy a { ry(pi/2) a; }
-qreg q[3];
+qubit[3] q;
 sy q[0];
 sy q[0];

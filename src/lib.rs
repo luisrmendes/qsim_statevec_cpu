@@ -30,7 +30,6 @@
 //!
 //! ```
 
-pub mod openq3_parser;
 pub mod qubit_layer;
 pub mod types;
 

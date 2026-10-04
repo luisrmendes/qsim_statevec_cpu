@@ -54,6 +54,7 @@ impl QubitLayer {
             for instruction in quantum_instructions.iter().cloned() {
                 let target_qubit = qubit_layer.execute_instruction(instruction.into())?;
 
+                // Affect one of qubit's 3 axis via Pauli gate application
                 if rng.random::<f64>() < noise_model.gate_error_prob {
                     match rng.random_range(0..3) {
                         0 => qubit_layer.pauli_x(target_qubit),

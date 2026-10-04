@@ -1,9 +1,0 @@
-[package]
-name = "qsim_cli"
-version = "0.1.1"
-edition = "2021"
-publish = false
-
-[dependencies]
-qsim_statevec_cpu = { path = ".." }
-oq3_circuit = { git = "https://github.com/luisrmendes/openqasm3_circuit_parser.git" }
