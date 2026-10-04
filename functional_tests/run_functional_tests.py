@@ -1,104 +1,118 @@
 #!/usr/bin/env python3
-'''
-This file defines functional tests comparing the qsim_statevec_cpu simulator lib against Qiskit's backend simulator
-'''
-from __future__ import annotations
+# Qiskit ships without type stubs
+# pyright: reportMissingTypeStubs=false
+"""Compare qsim_statevec_cpu against Qiskit on every circuit in reference_qasm/.
+
+Runs
+
+Runs with any Python 3: on first use, Qiskit is installed into functional_tests/.venv
+and the script re-executes itself with that interpreter.
+"""
 
 import math
+import os
 import subprocess
 import sys
 from pathlib import Path
 
-# Both sides print probabilities rounded to 12 decimal places
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parent
+CIRCUITS_DIR = SCRIPT_DIR / "reference_qasm"
+VENV_PYTHON = SCRIPT_DIR / ".venv" / "bin" / "python"
 ABS_TOLERANCE = 1e-9
 
+try:
+    from qiskit import qasm3
+    from qiskit.quantum_info import Statevector
+except ImportError:
+    if os.environ.get("QSIM_FT_BOOTSTRAPPED"):
+        raise
+    print("Setting up the Qiskit virtual environment...", file=sys.stderr)
+    subprocess.run([sys.executable, "-m", "venv", SCRIPT_DIR / ".venv"], check=True)
+    subprocess.run(
+        [
+            VENV_PYTHON,
+            "-m",
+            "pip",
+            "install",
+            "-q",
+            "-r",
+            SCRIPT_DIR / "requirements.txt",
+        ],
+        check=True,
+    )
+    os.environ["QSIM_FT_BOOTSTRAPPED"] = "1"
+    os.execv(VENV_PYTHON, [VENV_PYTHON, __file__, *sys.argv[1:]])
+
 USE_COLOR = sys.stdout.isatty()
-GREEN = "\033[92m" if USE_COLOR else ""
-RED = "\033[91m" if USE_COLOR else ""
-BOLD = "\033[1m" if USE_COLOR else ""
-RESET = "\033[0m" if USE_COLOR else ""
+PASS = "\033[92mPASS\033[0m" if USE_COLOR else "PASS"
+FAIL = "\033[91mFAIL\033[0m" if USE_COLOR else "FAIL"
 
 
-def run_command(command: list[str], cwd: Path) -> list[str]:
-    try:
-        completed = subprocess.run(command, cwd=cwd, check=True, capture_output=True, text=True)
-    except subprocess.CalledProcessError as error:
-        print(f"Command failed with exit code {error.returncode}: {' '.join(command)}", file=sys.stderr)
-        print(error.stderr, file=sys.stderr)
-        raise SystemExit(1) from error
-    return [line for line in completed.stdout.splitlines() if line]
-
-
-def parse_results(lines: list[str], source: str) -> dict[str, str]:
-    '''Parses lines in the format NAME=RESULTS into a {NAME: RESULTS} dict'''
-    results: dict[str, str] = {}
-    for line in lines:
-        name, sep, result = line.partition("=")
-        if not sep:
-            raise SystemExit(f"Malformed {source} output line (expected NAME=RESULTS): {line!r}")
-        if name in results:
-            raise SystemExit(f"Duplicate test name in {source} output: {name}")
-        results[name] = result
+def qiskit_results() -> dict[str, list[float]]:
+    """P(qubit = 1) for each qubit of each reference circuit, computed by Qiskit."""
+    results: dict[str, list[float]] = {}
+    for path in sorted(CIRCUITS_DIR.glob("*.openqasm")):
+        state = Statevector(qasm3.load(path))  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
+        num_qubits = state.num_qubits or 0  # only None for non-qubit dimensions
+        results[path.stem] = [float(state.probabilities([q])[1]) for q in range(num_qubits)]
     return results
 
 
-def results_match(qiskit_result: str, qsim_result: str) -> bool:
-    qiskit_values = [float(value) for value in qiskit_result.split(",")]
-    qsim_values = [float(value) for value in qsim_result.split(",")]
-    return len(qiskit_values) == len(qsim_values) and all(
-        math.isclose(a, b, rel_tol=0.0, abs_tol=ABS_TOLERANCE) for a, b in zip(qiskit_values, qsim_values)
+def qsim_results() -> dict[str, list[float]]:
+    """Same as qiskit_results, from the qsim_tests example (lines of NAME=P0,P1,...)."""
+    command = ["cargo", "run", "--quiet", "--example", "run_ref_files"]
+    completed = subprocess.run(
+        command, cwd=REPO_ROOT, capture_output=True, text=True, check=False
+    )
+    if completed.returncode != 0:
+        sys.exit(
+            f"{' '.join(command)} failed with exit code {completed.returncode}:\n{completed.stderr}"
+        )
+    results: dict[str, list[float]] = {}
+    for line in completed.stdout.splitlines():
+        name, _, values = line.partition("=")
+        results[name] = [float(v) for v in values.split(",")]
+    return results
+
+
+def matches(expected: list[float] | None, actual: list[float] | None) -> bool:
+    return (
+        expected is not None
+        and actual is not None
+        and len(expected) == len(actual)
+        and all(
+            math.isclose(e, a, rel_tol=0.0, abs_tol=ABS_TOLERANCE)
+            for e, a in zip(expected, actual)
+        )
     )
 
 
-def has_qiskit(python_bin: Path) -> bool:
-    if not python_bin.is_file():
-        return False
-    return subprocess.run([str(python_bin), "-c", "import qiskit"], capture_output=True, check=False).returncode == 0
+def fmt(values: list[float] | None) -> str:
+    return "<missing>" if values is None else ",".join(f"{v:.6g}" for v in values)
 
 
 def main() -> int:
-    script_dir = Path(__file__).resolve().parent
-    repo_root = script_dir.parent
-    venv_dir = script_dir / ".venv"
-    python_bin = venv_dir / "bin" / "python"
-    python_script = script_dir / "qiskit_tests.py"
-    requirements = script_dir / "requirements.txt"
+    expected = qiskit_results()
+    if not expected:
+        sys.exit(f"No .openqasm files found in {CIRCUITS_DIR}")
+    actual = qsim_results()
 
-    if not has_qiskit(python_bin):
-        print("Qiskit virtual environment not found or incomplete. Setting it up...")
-        subprocess.run([sys.executable, "-m", "venv", str(venv_dir)], check=True)
-        subprocess.run([str(python_bin), "-m", "pip", "install", "-r", str(requirements)], check=True)
-
-    qsim = parse_results(
-        run_command(["cargo", "run", "--quiet", "--example", "qsim_tests"], repo_root), "qsim_statevec_cpu"
-    )
-    qiskit = parse_results(run_command([str(python_bin), str(python_script)], repo_root), "Qiskit")
-
-    failing_tests: list[tuple[str, str, str]] = []
-    print("Test results (Qiskit vs qsim_statevec_cpu):\n")
-    for name in sorted(qiskit.keys() | qsim.keys()):
-        qiskit_result = qiskit.get(name, "<missing>")
-        qsim_result = qsim.get(name, "<missing>")
-        print(f"{BOLD}{name}{RESET}")
-        print(f"  Qiskit:            {qiskit_result}")
-        print(f"  qsim_statevec_cpu: {qsim_result}")
-        if name in qiskit and name in qsim and results_match(qiskit_result, qsim_result):
-            print(f"  Result:            {GREEN}PASS{RESET}")
+    failures = 0
+    for name in sorted(expected.keys() | actual.keys()):
+        want, got = expected.get(name), actual.get(name)
+        if matches(want, got):
+            print(f"{PASS}  {name}")
         else:
-            print(f"  Result:            {RED}FAIL{RESET}")
-            failing_tests.append((name, qiskit_result, qsim_result))
+            failures += 1
+            print(
+                f"{FAIL}  {name}\n        Qiskit: {fmt(want)}\n        qsim:   {fmt(got)}"
+            )
 
-    if not failing_tests:
-        print("\nAll tests passed: qsim_statevec_cpu output matches Qiskit for all reference circuits.")
-        return 0
-
-    print(f"\n{len(failing_tests)} test(s) failed. Failing tests summary:")
-    for name, qiskit_result, qsim_result in failing_tests:
-        print(f"{BOLD}{name}{RESET}")
-        print(f"  Qiskit:            {qiskit_result}")
-        print(f"  qsim_statevec_cpu: {qsim_result}")
-    return 1
+    total = len(expected.keys() | actual.keys())
+    print(f"\n{total - failures}/{total} circuits match Qiskit.")
+    return 1 if failures else 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    sys.exit(main())
