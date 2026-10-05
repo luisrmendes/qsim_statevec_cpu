@@ -7,6 +7,8 @@ Runs
 
 Runs with any Python 3: on first use, Qiskit is installed into functional_tests/.venv
 and the script re-executes itself with that interpreter.
+
+TODO: Implement noisy simulation functional tests and compare against Qiskit with noise models.
 """
 
 import math

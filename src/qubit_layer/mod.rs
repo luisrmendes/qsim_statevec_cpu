@@ -1,6 +1,5 @@
 use num::pow;
 use num::Complex;
-use rand::RngExt;
 use std::fmt;
 use std::fmt::Write;
 use std::ops::Add;
@@ -19,196 +18,114 @@ pub struct QubitLayer {
 }
 
 impl QubitLayer {
-    /// Executes multiple shots with stochastic noise.
-    ///
-    /// - `gate_error_prob`: after each gate, applies a random Pauli error (`X`, `Y`, or `Z`) on the same target qubit.
-    /// - `readout_flip_prob`: before measurement, applies a stochastic bit-flip (`X`) per qubit.
-    ///
-    /// Returns the accumulated noisy layer averaged by the number of shots.
-    ///
-    /// # Errors
-    /// Returns error if operation target qubit is out of range or if noise probabilities are outside `[0.0, 1.0]`.
-    pub fn execute_noisy_shots<T>(
-        &mut self,
-        quantum_instructions: &[T],
-        shots: u32,
-        noise_model: NoiseModel,
-    ) -> Result<(), String>
-    where
-        T: Clone + Into<QInstruct>,
-    {
-        if !noise_model.is_valid() {
-            return Err("Noise probabilities must be in the range [0.0, 1.0]".to_owned());
-        }
-        if shots == 0 {
-            return Err("Number of shots must be greater than 0".to_owned());
-        }
+    pub fn execute_instructions(&mut self, instructions: Vec<QSimGate>) -> Result<(), String> {
+        for gate in instructions {
+            match gate {
+                QSimGate::Single { op, target } => {
+                    if target >= self.get_num_qubits() {
+                        return Err(format!(
+                            "Target qubit {target:?} is out of range. Size of layer is {}",
+                            self.get_num_qubits()
+                        ));
+                    }
 
-        let mut rng = rand::rng();
-        let mut accumulated_qubit_layer = QubitLayer::new(self.get_num_qubits());
-        accumulated_qubit_layer.main[0] = Complex::new(0.0, 0.0);
+                    match op {
+                        SingleQubitOp::PauliX => self.pauli_x(target),
+                        SingleQubitOp::PauliY => self.pauli_y(target),
+                        SingleQubitOp::PauliZ => self.pauli_z(target),
+                        SingleQubitOp::Hadamard => self.hadamard(target),
+                        SingleQubitOp::S => self.s_gate(target),
+                        SingleQubitOp::T => self.t_gate(target),
+                        SingleQubitOp::SX => self.sqrt_pauli_x(target),
+                        SingleQubitOp::SY => self.sqrt_pauli_y(target),
+                    }
+                }
+                QSimGate::SingleCtrl {
+                    op,
+                    control,
+                    target,
+                } => {
+                    if control >= self.get_num_qubits() {
+                        return Err(format!(
+                            "Control qubit {control:?} is out of range. Size of layer is {}",
+                            self.get_num_qubits()
+                        ));
+                    }
+                    if control >= self.get_num_qubits() {
+                        return Err(format!(
+                            "Target qubit {target:?} is out of range. Size of layer is {}",
+                            self.get_num_qubits()
+                        ));
+                    }
+                    if target == control {
+                        return Err(format!(
+                            "Target qubit and control qubit are the same: {target:?}"
+                        ));
+                    }
 
-        for _ in 0..shots {
-            let mut qubit_layer = QubitLayer::new(self.get_num_qubits());
+                    match op {
+                        SingleCtrlQubitOp::ControlledX => {
+                            self.controlled_x(control, target);
+                        }
+                        SingleCtrlQubitOp::ControlledY => {
+                            self.controlled_y(control, target);
+                        }
+                        SingleCtrlQubitOp::ControlledZ => {
+                            self.controlled_z(control, target);
+                        }
+                    }
+                }
+                QSimGate::TwoCtrl {
+                    op,
+                    controls,
+                    target,
+                } => {
+                    if controls[0] >= self.get_num_qubits() {
+                        return Err(format!(
+                            "Control qubit {:?} is out of range. Size of layer is {}",
+                            controls[0],
+                            self.get_num_qubits()
+                        ));
+                    }
+                    if controls[1] >= self.get_num_qubits() {
+                        return Err(format!(
+                            "Control qubit {:?} is out of range. Size of layer is {}",
+                            controls[1],
+                            self.get_num_qubits()
+                        ));
+                    }
+                    if target >= self.get_num_qubits() {
+                        return Err(format!(
+                            "Target qubit {target:?} is out of range. Size of layer is {}",
+                            self.get_num_qubits()
+                        ));
+                    }
+                    if target == controls[0] {
+                        return Err(format!(
+                            "Target qubit and control qubit 1 are the same: {target:?}"
+                        ));
+                    }
+                    if target == controls[1] {
+                        return Err(format!(
+                            "Target qubit and control qubit 2 are the same: {target:?}"
+                        ));
+                    }
+                    if controls[0] == controls[1] {
+                        return Err(format!(
+                            "Control qubit 1 and 2 are the same: {:?}",
+                            controls[0]
+                        ));
+                    }
 
-            for instruction in quantum_instructions.iter().cloned() {
-                let target_qubit = qubit_layer.execute_instruction(instruction.into())?;
-
-                // Affect one of qubit's 3 axis via Pauli gate application
-                if rng.random::<f64>() < noise_model.gate_error_prob {
-                    match rng.random_range(0..3) {
-                        0 => qubit_layer.pauli_x(target_qubit),
-                        1 => qubit_layer.pauli_y(target_qubit),
-                        _ => qubit_layer.pauli_z(target_qubit),
+                    match op {
+                        TwoCtrlQubitOp::Toffoli => {
+                            self.toffoli(controls[0], controls[1], target);
+                        }
                     }
                 }
             }
-
-            for qubit in 0..self.get_num_qubits() {
-                if rng.random::<f64>() < noise_model.readout_flip_prob {
-                    qubit_layer.pauli_x(qubit);
-                }
-            }
-
-            accumulated_qubit_layer += &qubit_layer;
         }
-
-        if shots > 0 {
-            accumulated_qubit_layer /= shots;
-        }
-
-        self.main = accumulated_qubit_layer.main;
         Ok(())
-    }
-
-    /// Executes multiple quantum assembly instructions.
-    /// Receives a vector containing pairs of (`QuantumOp`, `TargetQubit`).
-    ///
-    /// # Examples
-    /// ```
-    /// use qsim_statevec_cpu::{QubitLayer, QuantumOp};
-    ///
-    /// let mut q_layer = QubitLayer::new(2);
-    /// let instructions = vec![(QuantumOp::PauliX, 0), (QuantumOp::PauliX, 1)];
-    /// q_layer.execute_noiseless(&instructions);
-    ///
-    /// // qubits 0 and 1 must be 1.0
-    /// assert_eq!(q_layer.measure_qubits()[0], 1.0);
-    /// assert_eq!(q_layer.measure_qubits()[1], 1.0);
-    /// ```
-    ///
-    /// # Errors
-    /// If operation target qubit is out of range.
-    pub fn execute_noiseless<T>(&mut self, quantum_instructions: &[T]) -> Result<(), String>
-    where
-        T: Clone + Into<QInstruct>,
-    {
-        for instruction in quantum_instructions.iter().cloned() {
-            let _ = self.execute_instruction(instruction.into())?;
-        }
-        Ok(())
-    }
-
-    fn execute_instruction(&mut self, instruction: QInstruct) -> Result<TargetQubit, String> {
-        match instruction {
-            QInstruct::Single((op, target_qubit)) => {
-                if target_qubit >= self.get_num_qubits() {
-                    return Err(format!(
-                        "Target qubit {target_qubit:?} is out of range. Size of layer is {}",
-                        self.get_num_qubits()
-                    ));
-                }
-
-                match op {
-                    QuantumOp::PauliX => self.pauli_x(target_qubit),
-                    QuantumOp::PauliY => self.pauli_y(target_qubit),
-                    QuantumOp::PauliZ => self.pauli_z(target_qubit),
-                    QuantumOp::Hadamard => self.hadamard(target_qubit),
-                    QuantumOp::S => self.s_gate(target_qubit),
-                    QuantumOp::T => self.t_gate(target_qubit),
-                    QuantumOp::SX => self.sqrt_pauli_x(target_qubit),
-                    QuantumOp::SY => self.sqrt_pauli_y(target_qubit),
-                }
-
-                Ok(target_qubit)
-            }
-            QInstruct::SingleCtrl((op, control_qubit, target_qubit)) => {
-                if control_qubit >= self.get_num_qubits() {
-                    return Err(format!(
-                        "Control qubit {control_qubit:?} is out of range. Size of layer is {}",
-                        self.get_num_qubits()
-                    ));
-                }
-                if target_qubit >= self.get_num_qubits() {
-                    return Err(format!(
-                        "Target qubit {target_qubit:?} is out of range. Size of layer is {}",
-                        self.get_num_qubits()
-                    ));
-                }
-                if target_qubit == control_qubit {
-                    return Err(format!(
-                        "Target qubit and control qubit are the same: {target_qubit:?}"
-                    ));
-                }
-
-                match op {
-                    SingleCtrlQubitOp::ControlledX => {
-                        self.controlled_x(control_qubit, target_qubit);
-                    }
-                    SingleCtrlQubitOp::ControlledY => {
-                        self.controlled_y(control_qubit, target_qubit);
-                    }
-                    SingleCtrlQubitOp::ControlledZ => {
-                        self.controlled_z(control_qubit, target_qubit);
-                    }
-                }
-
-                Ok(target_qubit)
-            }
-            QInstruct::TwoCtrl((op, control_qubit1, control_qubit2, target_qubit)) => {
-                if control_qubit1 >= self.get_num_qubits() {
-                    return Err(format!(
-                        "Control qubit {control_qubit1:?} is out of range. Size of layer is {}",
-                        self.get_num_qubits()
-                    ));
-                }
-                if control_qubit2 >= self.get_num_qubits() {
-                    return Err(format!(
-                        "Control qubit {control_qubit2:?} is out of range. Size of layer is {}",
-                        self.get_num_qubits()
-                    ));
-                }
-                if target_qubit >= self.get_num_qubits() {
-                    return Err(format!(
-                        "Target qubit {target_qubit:?} is out of range. Size of layer is {}",
-                        self.get_num_qubits()
-                    ));
-                }
-                if target_qubit == control_qubit1 {
-                    return Err(format!(
-                        "Target qubit and control qubit 1 are the same: {target_qubit:?}"
-                    ));
-                }
-                if target_qubit == control_qubit2 {
-                    return Err(format!(
-                        "Target qubit and control qubit 2 are the same: {target_qubit:?}"
-                    ));
-                }
-                if control_qubit1 == control_qubit2 {
-                    return Err(format!(
-                        "Control qubit 1 and 2 are the same: {control_qubit1:?}"
-                    ));
-                }
-
-                match op {
-                    TwoCtrlQubitOp::Toffoli => {
-                        self.toffoli(control_qubit1, control_qubit2, target_qubit);
-                    }
-                }
-
-                Ok(target_qubit)
-            }
-        }
     }
 
     /// Returns the estimated memory usage in bytes (`8 * 2 * 2^num_qubits`).
@@ -234,17 +151,17 @@ impl QubitLayer {
     /// Equivalent to collapsing qubits to obtain its state.
     /// # Examples
     /// ```
-    /// use qsim_statevec_cpu::{QubitLayer, QuantumOp};
+    /// use qsim_statevec_cpu::{QSimGate, QubitLayer, SingleQubitOp};
     ///
     /// let mut q_layer = QubitLayer::new(20);
-    /// q_layer.execute_noiseless(&[(QuantumOp::Hadamard, 0)]);
+    /// q_layer.execute_instructions(vec![QSimGate::Single { op: SingleQubitOp::Hadamard, target: 0 }]);
     /// println!("{:?}", q_layer.measure_qubits());
     ///
     /// ```
     #[must_use]
     pub fn measure_qubits(&self) -> MeasuredQubits {
         let num_qubits = self.get_num_qubits();
-        let mut measured_qubits: Vec<f64> = vec![0.0; num_qubits as usize];
+        let mut measured_qubits: MeasuredQubits = vec![0.0; num_qubits as usize].into();
 
         for index_main in 0..self.main.len() {
             if self.main[index_main] == Complex::new(0.0, 0.0) {

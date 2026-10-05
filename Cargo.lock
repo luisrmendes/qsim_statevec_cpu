@@ -515,7 +515,7 @@ checksum = "d6790f58c7ff633d8771f42965289203411a5e5c68388703c06e14f24770b41e"
 [[package]]
 name = "oq3_circuit"
 version = "0.1.0"
-source = "git+https://github.com/luisrmendes/openqasm3_circuit_parser.git#60ecae28c00f5f03e2d3918538123c491400326f"
+source = "git+https://github.com/luisrmendes/openqasm3_circuit_parser.git#37889854af0de13c635e3674cd0e0ec3460d7ea9"
 dependencies = [
  "oq3_semantics",
  "oq3_source_file",

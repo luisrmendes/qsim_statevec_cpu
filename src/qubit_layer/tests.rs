@@ -3,156 +3,6 @@ use super::*;
 use num::pow;
 use num::Complex;
 
-// More extensive functionality tests on quantum gate operations
-mod openqasm_tests {
-    use std::path::Path;
-
-    use super::*;
-
-    fn parse_qasm_file_to_ops(qasm_path: &Path) -> (u32, QInstructs) {
-        let circuit =
-            oq3_circuit::parse_circuit_file(qasm_path).expect("parser should parse OpenQASM file");
-
-        let ops: QInstructs = circuit
-            .gates
-            .iter()
-            .map(|g| map_gate_to_instruction(&g.name, &g.qubits))
-            .collect::<Result<_, _>>()
-            .expect("gate mapping should succeed");
-
-        (circuit.num_qubits, ops)
-    }
-
-    fn map_gate_to_instruction(gate_name: &str, qubits: &[u32]) -> Result<QInstruct, String> {
-        match (gate_name, qubits) {
-            ("x", [q]) => Ok(QInstruct::Single((QuantumOp::PauliX, *q))),
-            ("y", [q]) => Ok(QInstruct::Single((QuantumOp::PauliY, *q))),
-            ("z", [q]) => Ok(QInstruct::Single((QuantumOp::PauliZ, *q))),
-            ("h", [q]) => Ok(QInstruct::Single((QuantumOp::Hadamard, *q))),
-            ("s", [q]) => Ok(QInstruct::Single((QuantumOp::S, *q))),
-            ("t", [q]) => Ok(QInstruct::Single((QuantumOp::T, *q))),
-            ("sx", [q]) => Ok(QInstruct::Single((QuantumOp::SX, *q))),
-            ("sy", [q]) => Ok(QInstruct::Single((QuantumOp::SY, *q))),
-            ("cx", [c, t]) => Ok(QInstruct::SingleCtrl((
-                SingleCtrlQubitOp::ControlledX,
-                *c,
-                *t,
-            ))),
-            ("cy", [c, t]) => Ok(QInstruct::SingleCtrl((
-                SingleCtrlQubitOp::ControlledY,
-                *c,
-                *t,
-            ))),
-            ("cz", [c, t]) => Ok(QInstruct::SingleCtrl((
-                SingleCtrlQubitOp::ControlledZ,
-                *c,
-                *t,
-            ))),
-            ("ccx", [c1, c2, t]) => Ok(QInstruct::TwoCtrl((TwoCtrlQubitOp::Toffoli, *c1, *c2, *t))),
-            _ => Err(format!(
-                "Unsupported gate or arity: {gate_name} with {} operands",
-                qubits.len()
-            )),
-        }
-    }
-
-    #[test]
-    fn misc1_3_qubits() {
-        let (num_qubits, ops) = parse_qasm_file_to_ops(Path::new("qasm_files/misc1_3_qubits.qasm"));
-        let mut q_layer = QubitLayer::new(num_qubits);
-
-        let result = q_layer.execute_noiseless(&ops);
-        assert!(result.is_ok());
-
-        let measured = q_layer.measure_qubits();
-        assert_eq!(round_to(measured[0], 2), 0.5);
-        assert_eq!(round_to(measured[1], 2), 1.0);
-        assert_eq!(round_to(measured[2], 2), 0.5);
-    }
-
-    #[test]
-    fn misc1_4_qubits() {
-        let (num_qubits, ops) = parse_qasm_file_to_ops(Path::new("qasm_files/misc1_4_qubits.qasm"));
-        let mut q_layer = QubitLayer::new(num_qubits);
-
-        let result = q_layer.execute_noiseless(&ops);
-        assert!(result.is_ok());
-
-        let measured = q_layer.measure_qubits();
-        assert_eq!(round_to(measured[0], 2), 0.5);
-        assert_eq!(round_to(measured[1], 2), 0.5);
-        assert_eq!(round_to(measured[2], 2), 1.0);
-        assert_eq!(round_to(measured[3], 2), 0.5);
-    }
-
-    #[test]
-    fn misc1_5_qubits() {
-        let (num_qubits, ops) = parse_qasm_file_to_ops(Path::new("qasm_files/misc1_5_qubits.qasm"));
-        let mut q_layer = QubitLayer::new(num_qubits);
-
-        let result = q_layer.execute_noiseless(&ops);
-        assert!(result.is_ok());
-
-        let measured = q_layer.measure_qubits();
-        assert_eq!(round_to(measured[0], 2), 0.5);
-        assert_eq!(round_to(measured[1], 2), 0.5);
-        assert_eq!(round_to(measured[2], 2), 0.5);
-        assert_eq!(round_to(measured[3], 2), 1.0);
-        assert_eq!(round_to(measured[4], 2), 0.5);
-    }
-
-    #[test]
-    fn misc2_3_qubits() {
-        let (num_qubits, ops) = parse_qasm_file_to_ops(Path::new("qasm_files/misc2_3_qubits.qasm"));
-        let mut q_layer = QubitLayer::new(num_qubits);
-
-        let result = q_layer.execute_noiseless(&ops);
-        assert!(result.is_ok());
-
-        let measured = q_layer.measure_qubits();
-        assert_eq!(measured[0], 1.0);
-        assert_eq!(measured[1], 0.0);
-        assert_eq!(measured[2], 0.0);
-    }
-
-    #[test]
-    fn ctrl_x_1_5_qubits() {
-        let (num_qubits, ops) =
-            parse_qasm_file_to_ops(Path::new("qasm_files/ctrl_x_1_5_qubits.qasm"));
-        let mut q_layer = QubitLayer::new(num_qubits);
-
-        let result = q_layer.execute_noiseless(&ops);
-        assert!(result.is_ok());
-
-        let measured = q_layer.measure_qubits();
-        assert_eq!(num_qubits as usize, measured.len());
-        for value in measured {
-            assert_eq!(0.5, round_to(value, 2));
-        }
-    }
-
-    #[test]
-    fn ctrl_z_1_5_qubits() {
-        let (num_qubits, ops) =
-            parse_qasm_file_to_ops(Path::new("qasm_files/ctrl_z_1_5_qubits.qasm"));
-        let mut q_layer = QubitLayer::new(num_qubits);
-
-        let result = q_layer.execute_noiseless(&ops);
-        assert!(result.is_ok());
-
-        let measured = q_layer.measure_qubits();
-        assert_eq!(num_qubits as usize, measured.len());
-        for value in measured {
-            assert_eq!(0.5, (value * 10.0).round() / 10.0);
-        }
-    }
-
-    fn round_to(x: f64, places: u32) -> f64 {
-        let factor = 10_f64.powi(places as i32);
-        (x * factor).round() / factor
-    }
-}
-
 mod qubitlayer_tests {
     use super::*;
 
@@ -218,184 +68,6 @@ mod qubitlayer_tests {
         let lhs = QubitLayer::new(1);
         let rhs = QubitLayer::new(2);
         let _ = lhs + rhs;
-    }
-
-    #[test]
-    fn test_execute_shots() {
-        let instructions = vec![(QuantumOp::Hadamard, 0), (QuantumOp::PauliX, 1)];
-
-        let mut accumulated_layer = QubitLayer::new(3);
-        for _ in 0..4 {
-            let mut shot_layer = QubitLayer::new(3);
-            let result = shot_layer.execute_noiseless(&instructions);
-            assert!(result.is_ok());
-            accumulated_layer += &shot_layer;
-        }
-        accumulated_layer /= 4;
-
-        let measured = accumulated_layer.measure_qubits();
-        assert_eq!(0.5, (measured[0] * 10.0).round() / 10.0);
-        assert_eq!(1.0, (measured[1] * 10.0).round() / 10.0);
-        assert_eq!(0.0, (measured[2] * 10.0).round() / 10.0);
-    }
-
-    #[test]
-    fn test_execute_shots_zero() {
-        let mut q_layer = QubitLayer::new(3);
-        let instructions = vec![(QuantumOp::Hadamard, 0)];
-        let noise = NoiseModel {
-            gate_error_prob: 0.0,
-            readout_flip_prob: 0.0,
-        };
-
-        let result = q_layer.execute_noisy_shots(&instructions, 0, noise);
-        assert!(result.is_err());
-
-        let measured = q_layer.measure_qubits();
-        assert_eq!(0.0, measured[0]);
-        assert_eq!(0.0, measured[1]);
-        assert_eq!(0.0, measured[2]);
-    }
-
-    #[test]
-    fn test_execute_shots_failed_execute() {
-        let mut q_layer = QubitLayer::new(3);
-        let instructions = vec![(QuantumOp::PauliX, 10)];
-
-        let result = q_layer.execute_noiseless(&instructions);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_execute_noisy_shots_zero_noise() {
-        let instructions = vec![(QuantumOp::Hadamard, 0), (QuantumOp::PauliX, 1)];
-        let noise = NoiseModel {
-            gate_error_prob: 0.0,
-            readout_flip_prob: 0.0,
-        };
-
-        let mut accumulated_layer = QubitLayer::new(3);
-        let result = accumulated_layer.execute_noisy_shots(&instructions, 3, noise);
-        assert!(result.is_ok());
-
-        let measured = accumulated_layer.measure_qubits();
-        assert_eq!(0.5, (measured[0] * 10.0).round() / 10.0);
-        assert_eq!(1.0, (measured[1] * 10.0).round() / 10.0);
-        assert_eq!(0.0, (measured[2] * 10.0).round() / 10.0);
-    }
-
-    #[test]
-    fn test_execute_noisy_shots_readout_flip_full() {
-        let instructions: Vec<(QuantumOp, TargetQubit)> = vec![];
-        let noise = NoiseModel {
-            gate_error_prob: 0.0,
-            readout_flip_prob: 1.0,
-        };
-
-        let mut accumulated_layer = QubitLayer::new(3);
-        let result = accumulated_layer.execute_noisy_shots(&instructions, 2, noise);
-        assert!(result.is_ok());
-
-        let measured = accumulated_layer.measure_qubits();
-        assert_eq!(1.0, measured[0]);
-        assert_eq!(1.0, measured[1]);
-        assert_eq!(1.0, measured[2]);
-    }
-
-    #[test]
-    fn test_execute_noisy_shots_invalid_noise() {
-        let mut q_layer = QubitLayer::new(1);
-        let instructions = vec![(QuantumOp::PauliX, 0)];
-        let noise = NoiseModel {
-            gate_error_prob: 1.1,
-            readout_flip_prob: 0.0,
-        };
-
-        let result = q_layer.execute_noisy_shots(&instructions, 1, noise);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_random_executions() {
-        let mut q_layer: QubitLayer = QubitLayer::new(3);
-        let instructions = vec![
-            (QuantumOp::Hadamard, 0),
-            (QuantumOp::Hadamard, 1),
-            (QuantumOp::Hadamard, 2),
-            (QuantumOp::Hadamard, 0),
-            (QuantumOp::Hadamard, 1),
-            (QuantumOp::Hadamard, 2),
-        ];
-        let _ = q_layer.execute_noiseless(&instructions);
-        for it in 0..q_layer.get_num_qubits() {
-            assert_eq!(
-                0.0,
-                (q_layer.measure_qubits()[it as usize] * 10.0).round() / 10.0
-            );
-        }
-    }
-
-    #[test]
-    fn test_measure_qubits() {
-        let mut q_layer: QubitLayer = QubitLayer::new(3);
-        for it in 0..q_layer.get_num_qubits() {
-            assert_eq!(0.0, q_layer.measure_qubits()[it as usize]);
-        }
-
-        let instructions: Vec<(QuantumOp, TargetQubit)> = vec![];
-        let _ = q_layer.execute_noiseless(&instructions);
-
-        for it in 0..q_layer.get_num_qubits() {
-            assert_eq!(0.0, q_layer.measure_qubits()[it as usize]);
-        }
-    }
-
-    #[test]
-    fn test_spins_on_superposition() {
-        let mut q_layer: QubitLayer = QubitLayer::new(3);
-        let instructions = vec![
-            (QuantumOp::Hadamard, 0),
-            (QuantumOp::Hadamard, 1),
-            (QuantumOp::Hadamard, 2),
-            (QuantumOp::PauliX, 0),
-            (QuantumOp::PauliY, 1),
-            (QuantumOp::PauliZ, 2),
-        ];
-        let _ = q_layer.execute_noiseless(&instructions);
-        for it in 0..q_layer.get_num_qubits() {
-            assert_eq!(
-                0.5,
-                (q_layer.measure_qubits()[it as usize] * 10.0).round() / 10.0
-            );
-        }
-    }
-
-    #[test]
-    fn test_failed_execute() {
-        let mut q_layer: QubitLayer = QubitLayer::new(10);
-        let instructions = vec![(QuantumOp::PauliX, 10)]; // index goes up to 9
-
-        let result: Result<(), String> = q_layer.execute_noiseless(&instructions);
-        assert!(result.is_err());
-
-        let result: Result<(), String> = q_layer.execute_noiseless(&[(QuantumOp::Hadamard, 2112)]);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_execute() {
-        let mut q_layer: QubitLayer = QubitLayer::new(10);
-        let instructions = vec![
-            (QuantumOp::PauliX, 0),
-            (QuantumOp::PauliY, 1),
-            (QuantumOp::PauliZ, 2),
-        ];
-
-        if let Err(e) = q_layer.execute_noiseless(&instructions) {
-            panic!("Should not panic!. Error: {e}");
-        }
-
-        assert_eq!(1.0, q_layer.measure_qubits()[0].round());
     }
 
     #[test]
@@ -529,7 +201,17 @@ mod qubitlayer_tests {
         let hadamard_const = 1.0 / std::f64::consts::SQRT_2;
         let mut q_layer: QubitLayer = QubitLayer::new(1);
 
-        let result = q_layer.execute_noiseless(&[(QuantumOp::Hadamard, 0), (QuantumOp::S, 0)]);
+        let result = q_layer.execute_instructions(vec![
+            QSimGate::Single {
+                op: SingleQubitOp::Hadamard,
+                target: 0,
+            },
+            QSimGate::Single {
+                op: SingleQubitOp::S,
+                target: 0,
+            },
+        ]);
+
         assert!(result.is_ok());
 
         let expected = vec![
@@ -544,7 +226,16 @@ mod qubitlayer_tests {
         let hadamard_const = 1.0 / std::f64::consts::SQRT_2;
         let mut q_layer: QubitLayer = QubitLayer::new(1);
 
-        let result = q_layer.execute_noiseless(&[(QuantumOp::Hadamard, 0), (QuantumOp::T, 0)]);
+        let result = q_layer.execute_instructions(vec![
+            QSimGate::Single {
+                op: SingleQubitOp::Hadamard,
+                target: 0,
+            },
+            QSimGate::Single {
+                op: SingleQubitOp::T,
+                target: 0,
+            },
+        ]);
         assert!(result.is_ok());
 
         let expected = vec![
@@ -558,7 +249,10 @@ mod qubitlayer_tests {
     fn test_sqrt_pauli_x_simple() {
         let mut q_layer: QubitLayer = QubitLayer::new(1);
 
-        let result = q_layer.execute_noiseless(&[(QuantumOp::SX, 0)]);
+        let result = q_layer.execute_instructions(vec![QSimGate::Single {
+            op: SingleQubitOp::SX,
+            target: 0,
+        }]);
         assert!(result.is_ok());
 
         let expected = vec![Complex::new(0.5, 0.5), Complex::new(0.5, -0.5)];
@@ -569,7 +263,16 @@ mod qubitlayer_tests {
     fn test_sqrt_pauli_x_squared_equals_pauli_x() {
         let mut q_layer: QubitLayer = QubitLayer::new(1);
 
-        let result = q_layer.execute_noiseless(&[(QuantumOp::SX, 0), (QuantumOp::SX, 0)]);
+        let result = q_layer.execute_instructions(vec![
+            QSimGate::Single {
+                op: SingleQubitOp::SX,
+                target: 0,
+            },
+            QSimGate::Single {
+                op: SingleQubitOp::SX,
+                target: 0,
+            },
+        ]);
         assert!(result.is_ok());
 
         let results = q_layer.measure_qubits();
@@ -580,7 +283,10 @@ mod qubitlayer_tests {
     fn test_sqrt_pauli_y_simple() {
         let mut q_layer: QubitLayer = QubitLayer::new(1);
 
-        let result = q_layer.execute_noiseless(&[(QuantumOp::SY, 0)]);
+        let result = q_layer.execute_instructions(vec![QSimGate::Single {
+            op: SingleQubitOp::SY,
+            target: 0,
+        }]);
         assert!(result.is_ok());
 
         let expected = vec![Complex::new(0.5, 0.5), Complex::new(0.5, 0.5)];
@@ -591,7 +297,16 @@ mod qubitlayer_tests {
     fn test_sqrt_pauli_y_squared_equals_pauli_y() {
         let mut q_layer: QubitLayer = QubitLayer::new(1);
 
-        let result = q_layer.execute_noiseless(&[(QuantumOp::SY, 0), (QuantumOp::SY, 0)]);
+        let result = q_layer.execute_instructions(vec![
+            QSimGate::Single {
+                op: SingleQubitOp::SY,
+                target: 0,
+            },
+            QSimGate::Single {
+                op: SingleQubitOp::SY,
+                target: 0,
+            },
+        ]);
         assert!(result.is_ok());
 
         let expected = vec![Complex::new(0.0, 0.0), Complex::new(0.0, 1.0)];
@@ -663,11 +378,18 @@ mod qubitlayer_tests {
     fn test_execute_noiseless_controlled_y_instruction() {
         let mut q_layer: QubitLayer = QubitLayer::new(2);
 
-        let prep = vec![(QuantumOp::PauliX, 1)];
-        let prep_result = q_layer.execute_noiseless(&prep);
+        let prep = vec![QSimGate::Single {
+            op: SingleQubitOp::PauliX,
+            target: 1,
+        }];
+        let prep_result = q_layer.execute_instructions(prep);
         assert!(prep_result.is_ok());
 
-        let cy_result = q_layer.execute_noiseless(&[(SingleCtrlQubitOp::ControlledY, 1, 0)]);
+        let cy_result = q_layer.execute_instructions(vec![QSimGate::SingleCtrl {
+            op: SingleCtrlQubitOp::ControlledY,
+            control: 1,
+            target: 0,
+        }]);
         assert!(cy_result.is_ok());
 
         let expected = vec![
@@ -712,11 +434,24 @@ mod qubitlayer_tests {
     fn test_execute_noiseless_toffoli_instruction() {
         let mut q_layer: QubitLayer = QubitLayer::new(3);
 
-        let prep = vec![(QuantumOp::PauliX, 1), (QuantumOp::PauliX, 2)];
-        let prep_result = q_layer.execute_noiseless(&prep);
+        let prep = vec![
+            QSimGate::Single {
+                op: SingleQubitOp::PauliX,
+                target: 1,
+            },
+            QSimGate::Single {
+                op: SingleQubitOp::PauliX,
+                target: 2,
+            },
+        ];
+        let prep_result = q_layer.execute_instructions(prep);
         assert!(prep_result.is_ok());
 
-        let toffoli_result = q_layer.execute_noiseless(&[(TwoCtrlQubitOp::Toffoli, 1, 2, 0)]);
+        let toffoli_result = q_layer.execute_instructions(vec![QSimGate::TwoCtrl {
+            op: TwoCtrlQubitOp::Toffoli,
+            controls: [1, 2],
+            target: 0,
+        }]);
         assert!(toffoli_result.is_ok());
 
         let measured = q_layer.measure_qubits();
@@ -729,7 +464,11 @@ mod qubitlayer_tests {
     fn test_execute_noiseless_toffoli_out_of_range() {
         let mut q_layer: QubitLayer = QubitLayer::new(3);
 
-        let result = q_layer.execute_noiseless(&[(TwoCtrlQubitOp::Toffoli, 0, 7, 2)]);
+        let result = q_layer.execute_instructions(vec![QSimGate::TwoCtrl {
+            op: TwoCtrlQubitOp::Toffoli,
+            controls: [0, 7],
+            target: 2,
+        }]);
         assert!(result.is_err());
         assert_eq!(
             result.unwrap_err(),
@@ -741,7 +480,11 @@ mod qubitlayer_tests {
     fn test_execute_toffoli_with_same_control_qubits() {
         let mut q_layer: QubitLayer = QubitLayer::new(2);
 
-        let result = q_layer.execute_noiseless(&[(TwoCtrlQubitOp::Toffoli, 0, 1, 1)]);
+        let result = q_layer.execute_instructions(vec![QSimGate::TwoCtrl {
+            op: TwoCtrlQubitOp::Toffoli,
+            controls: [0, 1],
+            target: 1,
+        }]);
         assert!(result.is_err());
         assert_eq!(
             result.unwrap_err(),

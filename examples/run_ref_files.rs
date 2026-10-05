@@ -1,26 +1,9 @@
-use oq3_circuit::{parse_circuit_file, GateApplication};
-use qsim_statevec_cpu::{QInstruct, QubitLayer, SingleCtrlQubitOp, SingleQubitOp, TwoCtrlQubitOp};
+use oq3_circuit::{parse_circuit_file, Gate, ParsedCircuit};
+use qsim_statevec_cpu::{
+    execute_noiseless, QSimCircuit, QSimGate, SingleCtrlQubitOp, SingleQubitOp, TwoCtrlQubitOp,
+};
 use std::fs;
 use std::path::Path;
-
-// Map instructions gathered from file to qsim_statevec_cpu's `QInstruct` representation.
-fn to_instruction(gate: &GateApplication) -> QInstruct {
-    match (gate.name.as_str(), gate.qubits.as_slice()) {
-        ("x", &[t]) => (SingleQubitOp::PauliX, t).into(),
-        ("y", &[t]) => (SingleQubitOp::PauliY, t).into(),
-        ("z", &[t]) => (SingleQubitOp::PauliZ, t).into(),
-        ("h", &[t]) => (SingleQubitOp::Hadamard, t).into(),
-        ("s", &[t]) => (SingleQubitOp::S, t).into(),
-        ("t", &[t]) => (SingleQubitOp::T, t).into(),
-        ("sx", &[t]) => (SingleQubitOp::SX, t).into(),
-        ("sy", &[t]) => (SingleQubitOp::SY, t).into(),
-        ("cx", &[c, t]) => (SingleCtrlQubitOp::ControlledX, c, t).into(),
-        ("cy", &[c, t]) => (SingleCtrlQubitOp::ControlledY, c, t).into(),
-        ("cz", &[c, t]) => (SingleCtrlQubitOp::ControlledZ, c, t).into(),
-        ("ccx", &[c0, c1, t]) => (TwoCtrlQubitOp::Toffoli, c0, c1, t).into(),
-        _ => panic!("unsupported gate: {gate:?}"),
-    }
-}
 
 // Prints `NAME=P0,P1,...` (probability of each qubit being 1) for every reference circuit.
 // Run through functional_tests/run_functional_tests.py, which compares the output against Qiskit.
@@ -33,18 +16,44 @@ fn main() {
         if path.extension().is_none_or(|ext| ext != "openqasm") {
             continue;
         }
-        let circuit = parse_circuit_file(&path)
+        let circuit: ParsedCircuit = parse_circuit_file(&path)
             .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
-        let instructions: Vec<QInstruct> = circuit.gates.iter().map(to_instruction).collect();
 
-        let mut layer = QubitLayer::new(circuit.num_qubits);
-        layer
-            .execute_noiseless(&instructions)
+        let circuit: QSimCircuit = convert_parsed_circuit_into_qsim_circuit(circuit);
+
+        let results = execute_noiseless(circuit)
             .unwrap_or_else(|error| panic!("failed to execute {}: {error}", path.display()));
 
-        let probabilities: Vec<String> =
-            layer.measure_qubits().iter().map(f64::to_string).collect();
+        let measured_qubits: Vec<String> = results.iter().map(f64::to_string).collect();
+
         let name = path.file_stem().unwrap_or_default().to_string_lossy();
-        println!("{name}={}", probabilities.join(","));
+        println!("{name}={}", measured_qubits.join(","));
+    }
+}
+
+// Convert ParsedCircuit into QSimCircuit
+fn convert_parsed_circuit_into_qsim_circuit(circuit: ParsedCircuit) -> QSimCircuit {
+    fn to_qsim_gate(gate: Gate) -> QSimGate {
+        match (gate.name.as_str(), gate.qubits.as_slice()) {
+            ("x", &[t]) => (SingleQubitOp::PauliX, t).into(),
+            ("y", &[t]) => (SingleQubitOp::PauliY, t).into(),
+            ("z", &[t]) => (SingleQubitOp::PauliZ, t).into(),
+            ("h", &[t]) => (SingleQubitOp::Hadamard, t).into(),
+            ("s", &[t]) => (SingleQubitOp::S, t).into(),
+            ("t", &[t]) => (SingleQubitOp::T, t).into(),
+            ("sx", &[t]) => (SingleQubitOp::SX, t).into(),
+            ("sy", &[t]) => (SingleQubitOp::SY, t).into(),
+            ("cx", &[c, t]) => (SingleCtrlQubitOp::ControlledX, c, t).into(),
+            ("cy", &[c, t]) => (SingleCtrlQubitOp::ControlledY, c, t).into(),
+            ("cz", &[c, t]) => (SingleCtrlQubitOp::ControlledZ, c, t).into(),
+            ("ccx", &[c0, c1, t]) => (TwoCtrlQubitOp::Toffoli, c0, c1, t).into(),
+            _ => panic!("unsupported gate: {gate:?}"),
+        }
+    }
+    let gates = circuit.gates.into_iter().map(to_qsim_gate).collect();
+
+    QSimCircuit {
+        num_qubits: circuit.num_qubits,
+        gates,
     }
 }
