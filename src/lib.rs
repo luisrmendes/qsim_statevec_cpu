@@ -49,6 +49,29 @@ pub use types::*;
 ///
 /// Returns the accumulated noisy layer averaged by the number of shots.
 ///
+/// # Examples
+/// ```
+/// use qsim_statevec_cpu::{execute_noisy_shots, NoiseModel, QSimCircuit, QSimGate, SingleQubitOp};
+///
+/// let circuit = QSimCircuit {
+///     num_qubits: 2,
+///     gates: vec![
+///         QSimGate::Single { op: SingleQubitOp::PauliX, target: 0 },
+///         QSimGate::Single { op: SingleQubitOp::PauliX, target: 1 },
+///     ],
+/// };
+/// let noise = NoiseModel {
+///     gate_error_prob: 0.01,
+///     readout_flip_prob: 0.01,
+/// };
+///
+/// let results = execute_noisy_shots(circuit, 100, noise).expect("circuit should execute");
+///
+/// // Noise is random, so qubits 0 and 1 are only close to 1.0
+/// assert!(results[0] > 0.9);
+/// assert!(results[1] > 0.9);
+/// ```
+///
 /// # Errors
 /// Returns error if operation target qubit is out of range or if noise probabilities are outside `[0.0, 1.0]`.
 pub fn execute_noisy_shots(
