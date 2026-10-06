@@ -88,17 +88,16 @@ pub struct QSimCircuit {
     pub gates: Vec<QSimGate>,
 }
 
-pub type QSimGates = Vec<QSimGate>;
 pub type TargetQubit = u32;
 pub type CtrlQubit = u32;
 
 /// Probability of each qubit being measured as 1.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct MeasuredQubits(pub Vec<f64>);
+pub struct MeasuredQubits(Box<[f64]>);
 
 impl From<Vec<f64>> for MeasuredQubits {
     fn from(v: Vec<f64>) -> Self {
-        Self(v)
+        Self(v.into_boxed_slice())
     }
 }
 
@@ -122,16 +121,22 @@ impl DivAssign<f64> for MeasuredQubits {
     }
 }
 
-// Let it behave like a Vec<f64> everywhere else: indexing, .len(), .iter(), slices
+// TODO: Understand Deref traits
 impl Deref for MeasuredQubits {
-    type Target = Vec<f64>;
-    fn deref(&self) -> &Vec<f64> {
+    type Target = [f64];
+    fn deref(&self) -> &[f64] {
         &self.0
     }
 }
 impl DerefMut for MeasuredQubits {
-    fn deref_mut(&mut self) -> &mut Vec<f64> {
+    fn deref_mut(&mut self) -> &mut [f64] {
         &mut self.0
+    }
+}
+
+impl From<MeasuredQubits> for Vec<f64> {
+    fn from(measured: MeasuredQubits) -> Self {
+        measured.0.into_vec()
     }
 }
 

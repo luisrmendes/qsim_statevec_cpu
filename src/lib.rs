@@ -30,8 +30,8 @@
 //!
 //! ```
 
-pub mod qubit_layer;
-pub mod types;
+mod qubit_layer;
+mod types;
 
 #[cfg(test)]
 mod tests;
