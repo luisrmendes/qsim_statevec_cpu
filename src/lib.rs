@@ -1,24 +1,24 @@
 //! Quantum circuit simulator
 //!
 //! Provides an abstraction for quantum circuit simulations.
-//! Uses the state vector simulation method.
+//! Uses the state vector simulation method running on CPU using main system memory.
 //! Memory consumption is 8 * 2 * 2<sup>`num_qubits`</sup> bytes. For example, simulating 25 qubits costs ~537 MB.
 //!
 //! # Example
 //!
 //! ```
-//! use qsim_statevec_cpu::{QubitLayer, QuantumOp};
+//! use qsim_statevec_cpu::{QSimGate, QubitLayer, SingleQubitOp};
 //!
 //! let mut q_layer: QubitLayer = QubitLayer::new(20);
 //!
 //! let instructions = vec![
-//!     (QuantumOp::PauliX, 0),
-//!     (QuantumOp::PauliY, 1),
-//!     (QuantumOp::PauliZ, 2),
-//!     (QuantumOp::Hadamard, 3),
+//!     QSimGate::Single { op: SingleQubitOp::PauliX, target: 0 },
+//!     QSimGate::Single { op: SingleQubitOp::PauliY, target: 1 },
+//!     QSimGate::Single { op: SingleQubitOp::PauliZ, target: 2 },
+//!     QSimGate::Single { op: SingleQubitOp::Hadamard, target: 3 },
 //! ];
 //!
-//! if let Err(e) = q_layer.execute_noiseless(instructions) {
+//! if let Err(e) = q_layer.execute_instructions(instructions) {
 //!     panic!("Failed to execute instructions! Error: {e}");
 //! }
 //!
@@ -30,625 +30,135 @@
 //!
 //! ```
 
-use num::pow;
-use num::Complex;
-use rand::Rng;
-use serde::de;
-use serde::de::{VariantAccess, Visitor};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::fmt;
-use std::fmt::Write;
-use std::ops::Add;
-use std::ops::AddAssign;
-
-/// Supported quantum operations, equivalent to quantum gates in a circuit.
-/// Operations with 'Par' suffix are experimental multi-threaded implementations, not guaranteed to improve performance.
-#[derive(Clone, PartialEq, Debug)]
-pub enum QuantumOp {
-    PauliX,
-    PauliY,
-    PauliZ,
-    Hadamard,
-}
-
-impl Serialize for QuantumOp {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        match *self {
-            QuantumOp::PauliX => serializer.serialize_unit_variant("QuantumOp", 0, "PauliX"),
-            QuantumOp::PauliY => serializer.serialize_unit_variant("QuantumOp", 1, "PauliY"),
-            QuantumOp::PauliZ => serializer.serialize_unit_variant("QuantumOp", 1, "PauliZ"),
-            QuantumOp::Hadamard => serializer.serialize_unit_variant("QuantumOp", 1, "Hadamard"),
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for QuantumOp {
-    fn deserialize<D>(deserializer: D) -> Result<QuantumOp, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        pub enum Field {
-            PauliX,
-            PauliY,
-            PauliZ,
-            Hadamard,
-        }
-        impl<'de> Deserialize<'de> for Field {
-            fn deserialize<D>(deserializer: D) -> Result<Field, D::Error>
-            where
-                D: Deserializer<'de>,
-            {
-                struct FieldVisitor;
-
-                impl Visitor<'_> for FieldVisitor {
-                    type Value = Field;
-
-                    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                        formatter.write_str("`PauliX`, `PauliY`, `PauliZ`, `Hadamard`")
-                    }
-
-                    fn visit_str<E>(self, value: &str) -> Result<Field, E>
-                    where
-                        E: de::Error,
-                    {
-                        match value {
-                            "PauliX" => Ok(Field::PauliX),
-                            "PauliY" => Ok(Field::PauliY),
-                            "PauliZ" => Ok(Field::PauliZ),
-                            "Hadamard" => Ok(Field::Hadamard),
-
-                            _ => Err(de::Error::unknown_variant(
-                                value,
-                                &["PauliX", "PauliY", "PauliZ", "Hadamard"],
-                            )),
-                        }
-                    }
-                }
-
-                deserializer.deserialize_identifier(FieldVisitor)
-            }
-        }
-
-        struct MyEnumVisitor;
-
-        impl<'de> Visitor<'de> for MyEnumVisitor {
-            type Value = QuantumOp;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("struct QuantumOp")
-            }
-
-            fn visit_enum<A>(self, data: A) -> Result<QuantumOp, A::Error>
-            where
-                A: de::EnumAccess<'de>,
-            {
-                let (field, variant) = data.variant::<Field>()?;
-                match field {
-                    Field::PauliX => variant.unit_variant().map(|()| QuantumOp::PauliX),
-                    Field::PauliY => variant.unit_variant().map(|()| QuantumOp::PauliY),
-                    Field::PauliZ => variant.unit_variant().map(|()| QuantumOp::PauliX),
-                    Field::Hadamard => variant.unit_variant().map(|()| QuantumOp::Hadamard),
-                }
-            }
-        }
-
-        deserializer.deserialize_enum(
-            "QuantumOp",
-            &["PauliX", "PauliY", "PauliZ", "Hadamard"],
-            MyEnumVisitor,
-        )
-    }
-}
-
-pub type QGates = Vec<(QuantumOp, TargetQubit)>;
-pub type TargetQubit = u32;
-pub type MeasuredQubits = Vec<f64>;
-
-#[derive(Clone, Copy, Debug)]
-pub struct NoiseModel {
-    pub gate_error_prob: f64,
-    pub readout_flip_prob: f64,
-}
-
-impl NoiseModel {
-    fn is_valid(self) -> bool {
-        (0.0..=1.0).contains(&self.gate_error_prob) && (0.0..=1.0).contains(&self.readout_flip_prob)
-    }
-}
-
-/// Quantum Assembly parser.
-/// Supports a simple subset of `OpenQASM` 3.0 (<https://openqasm.com/versions/3.0/index.html>)
-pub mod openq3_parser {
-    use crate::QGates;
-    use crate::QuantumOp;
-    use crate::TargetQubit;
-
-    pub struct ParsedInstruct {
-        pub num_qubits: u32,
-        pub ops: QGates,
-    }
-
-    /// Parses the contents of a qasm file
-    ///
-    /// # Errors
-    /// Returns error if encounters semantic errors in the qasm file contents
-    pub fn parse(file_contents: &str) -> Result<ParsedInstruct, String> {
-        // create a vector of strings split by newline
-        let mut lines: Vec<String> = file_contents
-            .split('\n')
-            .map(std::borrow::ToOwned::to_owned)
-            .collect();
-
-        // find qreg declaration line
-        let Some(remove_delim) = lines.iter().position(|line| line.contains("qreg")) else {
-            return Err("Failed to parse the number of qubits!".to_owned());
-        };
-
-        // Parse the number of qubits
-        let num_qubits: String = lines[remove_delim]
-            .chars()
-            .filter(|&c| c.is_numeric())
-            .collect();
-        let Ok(num_qubits) = num_qubits.parse::<u32>() else {
-            return Err("Failed to parse the number of qubits!".to_owned());
-        };
-
-        // remove all lines before and including qreg
-        lines.drain(0..=remove_delim);
-
-        // Filter each newline
-        let mut parsed_instructions: Vec<(QuantumOp, TargetQubit)> = vec![];
-        for line in &lines {
-            let operation: &str = match line.split_whitespace().next() {
-                Some(operation) => operation,
-                None => continue,
-            };
-
-            // parse qubit target list
-            let target_qubits: TargetQubit = match operation {
-                // fetch the only target qubit after the op string
-                "x" | "y" | "z" | "h" => {
-                    let filtered_line: String = line
-                        .chars()
-                        .filter(|&c| c.is_numeric() || c == ' ')
-                        .collect();
-                    let filtered_line: Vec<String> = filtered_line
-                        .split(' ')
-                        .map(std::borrow::ToOwned::to_owned)
-                        .collect();
-                    match filtered_line[1].parse::<TargetQubit>() {
-                        Ok(x) => x,
-                        Err(_) => return Err("Failed to parse the target qubit!".to_owned()),
-                    }
-                }
-                // TODO: fetch two target qubits after the op string cx and cz
-                // TODO: fetch three target qubits after the op string ccx
-                _ => {
-                    // trace!("Skipping unknown operation {}", other);
-                    continue;
-                }
-            };
-
-            // parse operation codes
-            let operation: QuantumOp = match operation {
-                "x" => QuantumOp::PauliX,
-                "y" => QuantumOp::PauliY,
-                "z" => QuantumOp::PauliZ,
-                "h" => QuantumOp::Hadamard,
-                other => return Err(format!("Operation Code {other} not recognized!")),
-            };
-
-            parsed_instructions.push((operation, target_qubits));
-        }
-
-        Ok(ParsedInstruct {
-            num_qubits,
-            ops: parsed_instructions,
-        })
-    }
-}
-
-/// The main abstraction of quantum circuit simulation.
-/// Contains the complex values of each possible state.
-#[derive(Clone, PartialEq)]
-pub struct QubitLayer {
-    main: Vec<Complex<f64>>,
-    parity: Vec<Complex<f64>>,
-    num_qubits: u32,
-}
-
-impl QubitLayer {
-    /// Executes multiple shots with stochastic noise.
-    ///
-    /// - `gate_error_prob`: after each gate, applies a random Pauli error (`X`, `Y`, or `Z`) on the same target qubit.
-    /// - `readout_flip_prob`: before measurement, applies a stochastic bit-flip (`X`) per qubit.
-    ///
-    /// Returns the accumulated noisy layer averaged by the number of shots.
-    ///
-    /// # Errors
-    /// Returns error if operation target qubit is out of range or if noise probabilities are outside `[0.0, 1.0]`.
-    pub fn execute_noisy_shots(
-        &mut self,
-        quantum_instructions: &[(QuantumOp, TargetQubit)],
-        shots: u32,
-        noise_model: NoiseModel,
-    ) -> Result<(), String> {
-        if !noise_model.is_valid() {
-            return Err("Noise probabilities must be in the range [0.0, 1.0]".to_owned());
-        }
-
-        let mut rng = rand::thread_rng();
-        let mut accumulated_qubit_layer = QubitLayer::new(self.get_num_qubits());
-
-        for _ in 0..shots {
-            let mut qubit_layer = QubitLayer::new(self.get_num_qubits());
-
-            for (op, target_qubit) in quantum_instructions.iter().cloned() {
-                if target_qubit >= qubit_layer.get_num_qubits() {
-                    return Err(format!(
-                        "Target qubit {target_qubit:?} is out of range. Size of layer is {}",
-                        qubit_layer.get_num_qubits()
-                    ));
-                }
-
-                match op {
-                    QuantumOp::PauliX => qubit_layer.pauli_x(target_qubit),
-                    QuantumOp::PauliY => qubit_layer.pauli_y(target_qubit),
-                    QuantumOp::PauliZ => qubit_layer.pauli_z(target_qubit),
-                    QuantumOp::Hadamard => qubit_layer.hadamard(target_qubit),
-                }
-
-                if rng.gen::<f64>() < noise_model.gate_error_prob {
-                    match rng.gen_range(0..3) {
-                        0 => qubit_layer.pauli_x(target_qubit),
-                        1 => qubit_layer.pauli_y(target_qubit),
-                        _ => qubit_layer.pauli_z(target_qubit),
-                    }
-                }
-            }
-
-            for qubit in 0..self.get_num_qubits() {
-                if rng.gen::<f64>() < noise_model.readout_flip_prob {
-                    qubit_layer.pauli_x(qubit);
-                }
-            }
-
-            accumulated_qubit_layer += &qubit_layer;
-        }
-
-        if shots > 0 {
-            accumulated_qubit_layer.scale_amplitudes(shots);
-        }
-
-        self.main = accumulated_qubit_layer.main;
-        Ok(())
-    }
-
-    /// Executes multiple quantum assembly instructions.
-    /// Receives a vector containing pairs of (`QuantumOp`, `TargetQubit`).
-    ///
-    /// # Examples
-    /// ```
-    /// use qsim_statevec_cpu::{QubitLayer, QuantumOp};
-    ///
-    /// let mut q_layer = QubitLayer::new(2);
-    /// let instructions = vec![(QuantumOp::PauliX, 0), (QuantumOp::PauliX, 1)];
-    /// q_layer.execute_noiseless(instructions);
-    ///
-    /// // qubits 0 and 1 must be 1.0
-    /// assert_eq!(q_layer.measure_qubits()[0], 1.0);
-    /// assert_eq!(q_layer.measure_qubits()[1], 1.0);
-    /// ```
-    ///
-    /// # Errors
-    /// If operation target qubit is out of range.
-    pub fn execute_noiseless(
-        &mut self,
-        quantum_instructions: Vec<(QuantumOp, TargetQubit)>,
-    ) -> Result<(), String> {
-        for (op, target_qubit) in quantum_instructions {
-            if target_qubit >= self.get_num_qubits() {
-                return Err(format!(
-                    "Target qubit {target_qubit:?} is out of range. Size of layer is {}",
-                    self.get_num_qubits()
-                )
-                .to_owned());
-            }
-            match op {
-                QuantumOp::PauliX => {
-                    self.pauli_x(target_qubit);
-                }
-                QuantumOp::PauliY => {
-                    self.pauli_y(target_qubit);
-                }
-                QuantumOp::PauliZ => {
-                    self.pauli_z(target_qubit);
-                }
-                QuantumOp::Hadamard => {
-                    self.hadamard(target_qubit);
-                }
-            }
-        }
-        Ok(())
-    }
-
-    /// Returns the estimated memory usage in bytes (`8 * 2 * 2^num_qubits`).
-    #[must_use]
-    pub fn get_mem_usage(&self) -> u64 {
-        (8_u64 * 2_u64) * (2_u64.pow(self.num_qubits))
-    }
-
-    /// Returns the number of qubits represented in the `QubitLayer`.  
-    /// ```
-    /// use qsim_statevec_cpu::QubitLayer;
-    ///
-    /// let num_qubits = 20;
-    /// let q_layer = QubitLayer::new(num_qubits);
-    /// assert_eq!(num_qubits, 20);
-    /// ```
-    #[must_use]
-    pub fn get_num_qubits(&self) -> u32 {
-        self.num_qubits
-    }
-
-    /// Returns the results of the operations performed in the `QubitLayer`.
-    /// Equivalent to collapsing qubits to obtain its state.
-    /// # Examples
-    /// ```
-    /// use qsim_statevec_cpu::{QubitLayer, QuantumOp};
-    ///
-    /// let mut q_layer = QubitLayer::new(20);
-    /// q_layer.execute_noiseless(vec![(QuantumOp::Hadamard, 0)]);
-    /// println!("{:?}", q_layer.measure_qubits());
-    ///
-    /// ```
-    #[must_use]
-    pub fn measure_qubits(&self) -> MeasuredQubits {
-        let num_qubits = self.get_num_qubits();
-        let mut measured_qubits: Vec<f64> = vec![0.0; num_qubits as usize];
-
-        for index_main in 0..self.main.len() {
-            if self.main[index_main] == Complex::new(0.0, 0.0) {
-                continue;
-            }
-            for (index_measured_qubits, value) in measured_qubits.iter_mut().enumerate() {
-                // check if the state has a bit in common with the measured_qubit index
-                // does not matter which it is, thats why >= 1
-                if (index_main & Self::mask(index_measured_qubits)) > 0 {
-                    *value += pow(self.main[index_main].norm(), 2);
-                }
-            }
-        }
-        measured_qubits
-    }
-
-    /// Creates a new `QubitLayer` representing `num_qubits` qubits.  
-    /// # Examples
-    /// ```
-    /// use qsim_statevec_cpu::QubitLayer;
-    ///
-    /// let q_layer = QubitLayer::new(20);
-    /// ```
-    #[must_use]
-    pub fn new(num_qubits: u32) -> Self {
-        let mut main = vec![Complex::new(0.0, 0.0); 2_usize.pow(num_qubits)];
-        main[0] = Complex::new(1.0, 0.0);
-
-        Self {
-            main,
-            parity: vec![Complex::new(0.0, 0.0); 2_usize.pow(num_qubits)],
-            num_qubits,
-        }
-    }
-
-    /// Scales the amplitudes of the `QubitLayer` by a factor of `scale`.
-    fn scale_amplitudes(&mut self, scale: u32) {
-        let scale = f64::from(scale);
-        for amplitude in &mut self.main {
-            *amplitude /= scale;
-        }
-
-        for amplitude in &mut self.parity {
-            *amplitude /= scale;
-        }
-    }
-
-    fn hadamard(&mut self, target_qubit: u32) {
-        let hadamard_const = 1.0 / std::f64::consts::SQRT_2;
-        for state in 0..self.main.len() {
-            if self.main[state] != Complex::new(0.0, 0.0) {
-                if state & Self::mask(target_qubit as usize) != 0 {
-                    self.parity[state] -= hadamard_const * self.main[state];
-                } else {
-                    self.parity[state] += hadamard_const * self.main[state];
-                }
-            }
-        }
-        for state in 0..self.main.len() {
-            if self.main[state] != Complex::new(0.0, 0.0) {
-                let target_state: usize = state ^ Self::mask(target_qubit as usize);
-                self.parity[target_state] += hadamard_const * self.main[state];
-            }
-        }
-        self.reset_parity_layer();
-    }
-
-    fn pauli_z(&mut self, target_qubit: u32) {
-        for state in 0..self.main.len() {
-            if self.main[state] != Complex::new(0.0, 0.0) {
-                if state & Self::mask(target_qubit as usize) != 0 {
-                    self.parity[state] = -self.main[state];
-                } else {
-                    self.parity[state] = self.main[state];
-                }
-            }
-        }
-
-        self.reset_parity_layer();
-    }
-
-    fn pauli_y(&mut self, target_qubit: u32) {
-        for state in 0..self.main.len() {
-            if self.main[state] != Complex::new(0.0, 0.0) {
-                let target_state: usize = state ^ Self::mask(target_qubit as usize);
-                // if |0>, scalar 1i applies to |1>
-                // if |1>, scalar -1i
-                // TODO: probabily room for optimization here
-                if target_state & Self::mask(target_qubit as usize) != 0 {
-                    self.parity[target_state] = self.main[state] * Complex::new(0.0, 1.0);
-                } else {
-                    self.parity[target_state] = self.main[state] * Complex::new(0.0, -1.0);
-                }
-            }
-        }
-        self.reset_parity_layer();
-    }
-
-    fn pauli_x(&mut self, target_qubit: u32) {
-        for state in 0..self.main.len() {
-            if self.main[state] != Complex::new(0.0, 0.0) {
-                let mut target_state: usize = state;
-                target_state ^= Self::mask(target_qubit as usize); // flip bit 0
-                self.parity[target_state] = self.main[state];
-            }
-        }
-
-        self.reset_parity_layer();
-    }
-
-    fn reset_parity_layer(&mut self) {
-        // clone parity qubit layer to qubit layer
-        // self.main = self.parity.clone();
-        self.main.clone_from(&self.parity);
-
-        // reset parity qubit layer with 0
-        self.parity
-            .iter_mut()
-            .map(|x| *x = Complex::new(0.0, 0.0))
-            .count();
-    }
-
-    fn mask(position: usize) -> usize {
-        0x1usize << position
-    }
-}
-
-impl fmt::Debug for QubitLayer {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut output = String::new();
-        for index_main in 0..self.main.len() {
-            writeln!(
-                &mut output,
-                "state {:b} -> {}",
-                index_main, self.main[index_main]
-            )?;
-        }
-        write!(f, "{output}")
-    }
-}
-
-impl fmt::Display for QubitLayer {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut output = String::new();
-        for state in &self.main {
-            let str = format!("{output} {state}");
-            output = str;
-        }
-        output.remove(0);
-        write!(f, "{output}")
-    }
-}
-
-impl Add for QubitLayer {
-    type Output = Self;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        assert_eq!(
-            self.get_num_qubits(),
-            rhs.get_num_qubits(),
-            "Cannot add QubitLayers with different numbers of qubits"
-        );
-
-        let main = self
-            .main
-            .into_iter()
-            .zip(rhs.main)
-            .map(|(lhs, rhs)| lhs + rhs)
-            .collect();
-
-        let parity = self
-            .parity
-            .into_iter()
-            .zip(rhs.parity)
-            .map(|(lhs, rhs)| lhs + rhs)
-            .collect();
-
-        Self {
-            main,
-            parity,
-            num_qubits: self.num_qubits,
-        }
-    }
-}
-
-impl Add<&QubitLayer> for &QubitLayer {
-    type Output = QubitLayer;
-
-    fn add(self, rhs: &QubitLayer) -> Self::Output {
-        assert_eq!(
-            self.main.len(),
-            rhs.main.len(),
-            "Cannot add QubitLayers with different numbers of qubits"
-        );
-
-        let main = self
-            .main
-            .iter()
-            .zip(rhs.main.iter())
-            .map(|(lhs, rhs)| *lhs + *rhs)
-            .collect();
-
-        let parity = self
-            .parity
-            .iter()
-            .zip(rhs.parity.iter())
-            .map(|(lhs, rhs)| *lhs + *rhs)
-            .collect();
-
-        QubitLayer {
-            main,
-            parity,
-            num_qubits: self.num_qubits,
-        }
-    }
-}
-
-impl AddAssign<&QubitLayer> for QubitLayer {
-    fn add_assign(&mut self, rhs: &QubitLayer) {
-        assert_eq!(
-            self.main.len(),
-            rhs.main.len(),
-            "Cannot add QubitLayers with different numbers of qubits"
-        );
-
-        for (lhs, rhs_value) in self.main.iter_mut().zip(rhs.main.iter()) {
-            *lhs += *rhs_value;
-        }
-
-        for (lhs, rhs_value) in self.parity.iter_mut().zip(rhs.parity.iter()) {
-            *lhs += *rhs_value;
-        }
-    }
-}
-
-impl AddAssign for QubitLayer {
-    fn add_assign(&mut self, rhs: Self) {
-        *self += &rhs;
-    }
-}
+mod qubit_layer;
+mod types;
 
 #[cfg(test)]
 mod tests;
+
+pub use qubit_layer::QubitLayer;
+use rand::RngExt;
+pub use types::*;
+
+/// Executes multiple shots with stochastic noise.
+/// Injects random errors in each axis of the qubit by inserting Pauli gates in the circuit gate list.
+/// Randomly flips the measured qubit probabilities.
+///
+/// - `gate_error_prob`: after each gate, applies a random Pauli error (`X`, `Y`, or `Z`) on the same target qubit.
+/// - `readout_flip_prob`: before measurement, applies a stochastic bit-flip (`X`) per qubit.
+///
+/// Returns the accumulated noisy layer averaged by the number of shots.
+///
+/// # Examples
+/// ```
+/// use qsim_statevec_cpu::{execute_noisy_shots, NoiseModel, QSimCircuit, QSimGate, SingleQubitOp};
+///
+/// let circuit = QSimCircuit {
+///     num_qubits: 2,
+///     gates: vec![
+///         QSimGate::Single { op: SingleQubitOp::PauliX, target: 0 },
+///         QSimGate::Single { op: SingleQubitOp::PauliX, target: 1 },
+///     ],
+/// };
+/// let noise = NoiseModel {
+///     gate_error_prob: 0.01,
+///     readout_flip_prob: 0.01,
+/// };
+///
+/// let results = execute_noisy_shots(circuit, 100, noise).expect("circuit should execute");
+///
+/// // Noise is random, so qubits 0 and 1 are only close to 1.0
+/// assert!(results[0] > 0.9);
+/// assert!(results[1] > 0.9);
+/// ```
+///
+/// # Errors
+/// Returns error if operation target qubit is out of range or if noise probabilities are outside `[0.0, 1.0]`.
+pub fn execute_noisy_shots(
+    circuit: QSimCircuit,
+    shots: u32,
+    noise_model: NoiseModel,
+) -> Result<MeasuredQubits, String> {
+    if !noise_model.is_valid() {
+        return Err("Noise probabilities must be in the range [0.0, 1.0]".to_owned());
+    }
+    if shots == 0 {
+        return Err("Number of shots must be greater than 0".to_owned());
+    }
+
+    let mut accumulated_results: MeasuredQubits = vec![0.0; circuit.num_qubits as usize].into();
+
+    // Inject errors in the circuit as gates
+    let mut rng = rand::rng();
+    let mut gates_with_noise: Vec<QSimGate> = Vec::with_capacity(circuit.gates.len());
+    for it in circuit.gates {
+        gates_with_noise.push(it);
+
+        // Affect one of qubit's 3 axis via Pauli gate application
+        if rng.random::<f64>() < noise_model.gate_error_prob {
+            let pauli = match rng.random_range(0..3) {
+                0 => SingleQubitOp::PauliX,
+                1 => SingleQubitOp::PauliY,
+                _ => SingleQubitOp::PauliZ,
+            };
+            gates_with_noise.push(QSimGate::Single {
+                op: pauli,
+                target: it.target(),
+            });
+        }
+    }
+
+    for _ in 0..shots {
+        let mut results = execute_noiseless(QSimCircuit {
+            num_qubits: circuit.num_qubits,
+            gates: gates_with_noise.clone(),
+        })?;
+
+        // Randomly flips the probability of the result
+        for p in results.iter_mut() {
+            if rng.random::<f64>() < noise_model.readout_flip_prob {
+                *p = 1.0 - *p;
+            }
+        }
+
+        accumulated_results += &results;
+    }
+
+    if shots > 0 {
+        accumulated_results /= shots.into();
+    }
+
+    Ok(accumulated_results)
+}
+
+/// Executes noiseless quantum circuit.
+/// Receives a ParsedCircuit, converts to QSim gate types and executes on a QubitLayer.
+///
+/// # Examples
+/// ```
+/// use qsim_statevec_cpu::{execute_noiseless, QSimCircuit, QSimGate, SingleQubitOp};
+///
+/// let circuit = QSimCircuit {
+///     num_qubits: 2,
+///     gates: vec![
+///         QSimGate::Single { op: SingleQubitOp::PauliX, target: 0 },
+///         QSimGate::Single { op: SingleQubitOp::PauliX, target: 1 },
+///     ],
+/// };
+///
+/// let results = execute_noiseless(circuit).expect("circuit should execute");
+///
+/// // qubits 0 and 1 must be 1.0
+/// assert_eq!(results[0], 1.0);
+/// assert_eq!(results[1], 1.0);
+/// ```
+///
+/// # Errors
+/// Returns error if operation target qubit is out of range.
+pub fn execute_noiseless(circuit: QSimCircuit) -> Result<MeasuredQubits, String> {
+    let mut layer = QubitLayer::new(circuit.num_qubits);
+
+    layer.execute_instructions(circuit.gates)?;
+
+    Ok(layer.measure_qubits())
+}

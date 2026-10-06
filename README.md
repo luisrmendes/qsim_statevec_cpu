@@ -1,10 +1,10 @@
-# qsim_statevec_cpu
+# Quantum Simulator State Vector
 
-[![CI](https://github.com/luisrmendes/qsim_statevec_cpu/actions/workflows/codeChecks.yml/badge.svg)](https://github.com/luisrmendes/qsim_statevec_cpu/actions/workflows/codeChecks.yml)
-[![Security Audit](https://github.com/luisrmendes/qsim_statevec_cpu/actions/workflows/audit.yml/badge.svg)](https://github.com/luisrmendes/qsim_statevec_cpu/actions/workflows/audit.yml)
+<!-- Workflow status badges -->
+[![CI](https://github.com/luisrmendes/qsim_statevec_cpu/actions/workflows/ci.yml/badge.svg?event=push&job=code_checks)](https://github.com/luisrmendes/qsim_statevec_cpu/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT_OR_Apache--2.0-blue.svg)](https://github.com/luisrmendes/qsim_statevec_cpu#license)
 [![Cargo](https://img.shields.io/crates/v/quantum_state_sim.svg)](https://docs.rs/quantum_state_sim/0.1.0/quantum_state_sim/)
-[![Rust 1.67+](https://img.shields.io/badge/rust-1.67+-lightgray.svg)](
+[![Rust 1.95](https://img.shields.io/badge/rust-1.95-lightgray.svg)](
 https://www.rust-lang.org)
 [![Documentation](https://docs.rs/quantum_state_sim/badge.svg)](https://docs.rs/quantum_state_sim/0.1.0/quantum_state_sim/)
 
@@ -12,9 +12,32 @@ This provides a quantum simulation abstraction tool to simulate quantum circuits
 Uses the state vector simulation method.  
 Memory consumption is 8 * 2 * 2<sup>`num_qubits`</sup> bytes. For example, simulating 25 qubits costs ~537 MB.  
 
-The following gate operations are implemented:
+Implemented gate operations:
 
-- Pauli X gate
-- Pauli Y gate
-- Pauli Z gate
-- Hadamard gate
+- Pauli X
+- Pauli Y
+- Pauli Z
+- Hadamard
+- T
+- S
+- Controlled X
+- Controlled Y
+- Controlled Z
+- Toffoli
+- Sqrt Pauli X
+- Sqrt Pauli Y
+
+## Documentation and Examples
+https://docs.rs/quantum_state_sim/0.1.0/quantum_state_sim/
+
+## Dev Notes
+
+### Git hooks
+
+This repository includes a pre-commit hook in `.githooks/pre-commit` that runs multiple checks.  
+To enable it:
+
+```bash
+git config core.hooksPath .githooks
+chmod +x .githooks/pre-commit
+```
