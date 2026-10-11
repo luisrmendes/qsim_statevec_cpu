@@ -45,6 +45,7 @@ pub enum QSimGate {
 
 impl QSimGate {
     /// The qubit the gate acts on (for controlled gates, the target, not the controls).
+    #[must_use]
     pub fn target(&self) -> TargetQubit {
         match self {
             QSimGate::Single { target, .. }
@@ -147,6 +148,7 @@ pub struct NoiseModel {
 }
 
 impl NoiseModel {
+    #[must_use]
     pub fn is_valid(self) -> bool {
         (0.0..=1.0).contains(&self.gate_error_prob) && (0.0..=1.0).contains(&self.readout_flip_prob)
     }

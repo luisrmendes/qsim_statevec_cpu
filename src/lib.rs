@@ -33,12 +33,15 @@
 mod qubit_layer;
 mod types;
 
+// This is public to allow exploring optimizations in the QubitLayer abstraction,
+//  especially in noiseless execution.
+pub use qubit_layer::QubitLayer;
+pub use types::*;
+
 #[cfg(test)]
 mod tests;
 
-pub use qubit_layer::QubitLayer;
 use rand::RngExt;
-pub use types::*;
 
 /// Executes multiple shots with stochastic noise.
 /// Injects random errors in each axis of the qubit by inserting Pauli gates in the circuit gate list.
@@ -132,7 +135,7 @@ pub fn execute_noisy_shots(
 }
 
 /// Executes noiseless quantum circuit.
-/// Receives a ParsedCircuit, converts to QSim gate types and executes on a QubitLayer.
+/// Receives a `ParsedCircuit`, converts to `QSim` gate types and executes on a `QubitLayer`.
 ///
 /// # Examples
 /// ```

@@ -6,7 +6,7 @@ use std::ops::Add;
 use std::ops::AddAssign;
 use std::ops::DivAssign;
 
-use crate::types::*;
+use crate::types::{MeasuredQubits, QSimGate, SingleCtrlQubitOp, SingleQubitOp, TwoCtrlQubitOp};
 
 /// The main abstraction of quantum circuit simulation.
 /// Contains the complex values of each possible state.
@@ -18,6 +18,21 @@ pub struct QubitLayer {
 }
 
 impl QubitLayer {
+    /// Executes a list of `QSimGate` instructions on the `QubitLayer`.
+    ///
+    /// # Examples
+    /// ```
+    /// use qsim_statevec_cpu::{QSimGate, QubitLayer, SingleQubitOp};
+    ///
+    /// let mut q_layer = QubitLayer::new(3);
+    /// q_layer.execute_instructions(vec![QSimGate::Single { op: SingleQubitOp::PauliX, target: 0 }]);
+    /// assert_eq!(q_layer.measure_qubits(), vec![1.0, 0.0, 0.0].into());
+    /// ```
+    /// # Errors
+    /// Returns error if:
+    ///     - Gate target qubit or control qubits are out of range
+    ///     - Gate target and control qubits are the same
+    ///     - Control qubits are the same for gates with multiple controls
     pub fn execute_instructions(&mut self, instructions: Vec<QSimGate>) -> Result<(), String> {
         for gate in instructions {
             match gate {
