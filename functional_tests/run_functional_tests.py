@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Qiskit ships without type stubs
 # pyright: reportMissingTypeStubs=false
-"""Compare qsim_statevec_cpu against Qiskit on every circuit in reference_qasm/.
+"""Compare qsim_statevec_cpu against Qiskit on every circuit in qasm_files/reference/.
 
 Runs
 
@@ -19,7 +19,7 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
-CIRCUITS_DIR = SCRIPT_DIR / "reference_qasm"
+CIRCUITS_DIR = REPO_ROOT / "qasm_files" / "reference"
 VENV_PYTHON = SCRIPT_DIR / ".venv" / "bin" / "python"
 ABS_TOLERANCE = 1e-9
 
@@ -54,7 +54,7 @@ FAIL = "\033[91mFAIL\033[0m" if USE_COLOR else "FAIL"
 def qiskit_results() -> dict[str, list[float]]:
     """P(qubit = 1) for each qubit of each reference circuit, computed by Qiskit."""
     results: dict[str, list[float]] = {}
-    for path in sorted(CIRCUITS_DIR.glob("*.openqasm")):
+    for path in sorted(CIRCUITS_DIR.glob("*.qasm")):
         state = Statevector(qasm3.load(path))  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
         num_qubits = state.num_qubits or 0  # only None for non-qubit dimensions
         results[path.stem] = [float(state.probabilities([q])[1]) for q in range(num_qubits)]
@@ -97,7 +97,7 @@ def fmt(values: list[float] | None) -> str:
 def main() -> int:
     expected = qiskit_results()
     if not expected:
-        sys.exit(f"No .openqasm files found in {CIRCUITS_DIR}")
+        sys.exit(f"No .qasm files found in {CIRCUITS_DIR}")
     actual = qsim_results()
 
     failures = 0

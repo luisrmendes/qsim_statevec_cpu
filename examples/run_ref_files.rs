@@ -8,12 +8,12 @@ use std::path::Path;
 // Prints `NAME=P0,P1,...` (probability of each qubit being 1) for every reference circuit.
 // Run through functional_tests/run_functional_tests.py, which compares the output against Qiskit.
 fn main() {
-    let circuits_dir = Path::new("functional_tests/reference_qasm");
+    let circuits_dir = Path::new("qasm_files/reference");
     let entries = fs::read_dir(circuits_dir)
         .unwrap_or_else(|error| panic!("failed to read {}: {error}", circuits_dir.display()));
 
     for path in entries.filter_map(Result::ok).map(|entry| entry.path()) {
-        if path.extension().is_none_or(|ext| ext != "openqasm") {
+        if path.extension().is_none_or(|ext| ext != "qasm") {
             continue;
         }
         let circuit: ParsedCircuit = parse_circuit_file(&path)

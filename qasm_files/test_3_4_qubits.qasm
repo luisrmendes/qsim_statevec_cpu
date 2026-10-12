@@ -1,0 +1,20 @@
+OPENQASM 3.0;
+// Results: 
+//   Qubit 1 -> 50%
+//   Qubit 2 -> 50%
+//   Qubit 3 -> 100%
+//   Qubit 4 -> 0%
+
+include "stdgates.inc";
+
+qubit[4] q;
+
+x q[0];
+x q[1];
+x q[2];
+ccx q[0],q[1],q[2];
+z q[3];
+h q[0];
+x q[2];
+cx q[0],q[1];
+

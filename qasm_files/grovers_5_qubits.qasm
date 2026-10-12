@@ -1,3 +1,4 @@
+OPENQASM 3.0;
 // Grover's algorithm on 5 qubits
 
 include "stdgates.inc";
@@ -100,7 +101,7 @@ h q[2];
 x q[3];
 h q[3];
 barrier q[0],q[1],q[2],q[3],q[4];
-measure q[0] -> c[0];
-measure q[1] -> c[1];
-measure q[2] -> c[2];
-measure q[3] -> c[3];
+c[0] = measure q[0];
+c[1] = measure q[1];
+c[2] = measure q[2];
+c[3] = measure q[3];
