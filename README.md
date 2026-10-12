@@ -10,7 +10,7 @@ https://www.rust-lang.org)
 
 This provides a quantum simulation abstraction tool to simulate quantum circuits.  
 Uses the state vector simulation method.  
-Memory consumption is 2 * 8 * 2 * 2<sup>`num_qubits`</sup> bytes. For example, simulating 25 qubits costs ~537 MB.  
+Memory consumption is 2 * 8 * 2 * 2<sup>`num_qubits`</sup> bytes. For example, simulating 25 qubits costs ~1.07 GB.  
 
 Implemented gate operations:
 
