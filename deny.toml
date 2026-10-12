@@ -1,0 +1,6 @@
+[advisories]
+ignore = [
+    # Dev-only: oq3_circuit -> oq3_semantics -> boolenum -> proc-macro-error.
+    # Unmaintained, not a vulnerability, and no newer oq3_semantics/boolenum drops it.
+    { id = "RUSTSEC-2024-0370", reason = "unmaintained proc-macro-error, reached only through the oq3_circuit dev-dependency" },
+]
