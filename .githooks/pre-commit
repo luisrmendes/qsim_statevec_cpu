@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+if [ -t 1 ]; then
+    RED=$'\e[31m' GREEN=$'\e[32m' BOLD=$'\e[1m' RESET=$'\e[0m'
+    export CARGO_TERM_COLOR=always
+else
+    RED='' GREEN='' BOLD='' RESET=''
+fi
+
+log_file=$(mktemp)
+trap 'rm -f "$log_file"' EXIT
+failed_steps=()
+
+# Runs a step quietly; on failure prints the command, its exit code and its full output
+run_step() {
+    local name=$1
+    shift
+    printf '[pre-commit] %-24s' "$name..."
+    "$@" >"$log_file" 2>&1
+    local status=$?
+    if [ "$status" -eq 0 ]; then
+        echo "${GREEN}ok${RESET}"
+        return
+    fi
+    echo "${RED}FAILED${RESET}"
+    failed_steps+=("$name")
+    echo "${BOLD}  command:${RESET}   $*"
+    echo "${BOLD}  exit code:${RESET} $status"
+    echo "${BOLD}  output:${RESET}"
+    sed 's/^/    /' "$log_file"
+    echo
+}
+
+run_step "cargo fmt" cargo fmt -- --check
+run_step "cargo check" cargo check
+run_step "cargo test" cargo test -q
+run_step "functional tests" ./functional_tests/run_functional_tests.py
+# run_step "check advisories" cargo deny check advisories
+
+if [ ${#failed_steps[@]} -gt 0 ]; then
+    summary=$(printf ', %s' "${failed_steps[@]}")
+    echo "${RED}[pre-commit] ${#failed_steps[@]} check(s) failed:${RESET} ${summary:2}"
+    echo "[pre-commit] Fix the errors above, or bypass with 'git commit --no-verify'."
+    exit 1
+fi
+
+echo "${GREEN}[pre-commit] All checks passed.${RESET}"
