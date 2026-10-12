@@ -1,4 +1,4 @@
-use oq3_circuit::{parse_circuit_file, Gate, ParsedCircuit};
+use oq3_circuit::{parse_circuit, Gate, ParsedCircuit};
 use qsim_statevec_cpu::{QSimCircuit, QSimGate, SingleCtrlQubitOp, SingleQubitOp, TwoCtrlQubitOp};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -22,7 +22,9 @@ pub fn reference_circuits() -> Vec<(String, QSimCircuit)> {
     paths
         .into_iter()
         .map(|path| {
-            let circuit: ParsedCircuit = parse_circuit_file(&path)
+            let source = fs::read_to_string(&path)
+                .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
+            let circuit: ParsedCircuit = parse_circuit(&source)
                 .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
             let name = path
                 .file_stem()
