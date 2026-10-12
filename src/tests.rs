@@ -123,6 +123,31 @@ mod qsim_statevec_cpu_tests {
     }
 
     #[test]
+    fn test_execute_noisy_shots_gate_noise_sampled_per_shot() {
+        let circuit = QSimCircuit {
+            num_qubits: 1,
+            gates: vec![QSimGate::Single {
+                op: SingleQubitOp::PauliX,
+                target: 0,
+            }],
+        };
+        let noise = NoiseModel {
+            gate_error_prob: 1.0,
+            readout_flip_prob: 0.0,
+        };
+
+        let measured = execute_noisy_shots(circuit, 1000, noise).expect("shots should execute");
+
+        // Each shot appends a random Pauli after X: X and Y return the qubit to |0>, Z keeps |1>,
+        // so P(1) averages to 1/3. Sampling the noise once for all shots would give exactly 0 or 1.
+        assert!(
+            (0.2..0.47).contains(&measured[0]),
+            "expected P(1) close to 1/3, got {}",
+            measured[0]
+        );
+    }
+
+    #[test]
     fn test_random_executions() {
         let mut q_layer: QubitLayer = QubitLayer::new(3);
         let instructions = vec![

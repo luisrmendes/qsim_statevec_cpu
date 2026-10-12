@@ -25,7 +25,7 @@ impl QubitLayer {
     /// use qsim_statevec_cpu::{QSimGate, QubitLayer, SingleQubitOp};
     ///
     /// let mut q_layer = QubitLayer::new(3);
-    /// q_layer.execute_instructions(vec![QSimGate::Single { op: SingleQubitOp::PauliX, target: 0 }]);
+    /// q_layer.execute_instructions(vec![QSimGate::Single { op: SingleQubitOp::PauliX, target: 0 }]).expect("Should be able to execute instructions");
     /// assert_eq!(q_layer.measure_qubits(), vec![1.0, 0.0, 0.0].into());
     /// ```
     /// # Errors
@@ -66,7 +66,7 @@ impl QubitLayer {
                             self.get_num_qubits()
                         ));
                     }
-                    if control >= self.get_num_qubits() {
+                    if target >= self.get_num_qubits() {
                         return Err(format!(
                             "Target qubit {target:?} is out of range. Size of layer is {}",
                             self.get_num_qubits()
@@ -143,10 +143,10 @@ impl QubitLayer {
         Ok(())
     }
 
-    /// Returns the estimated memory usage in bytes (`8 * 2 * 2^num_qubits`).
+    /// Returns the estimated memory usage in bytes (`2 * 8 * 2 * 2^num_qubits`).
     #[must_use]
     pub fn get_mem_usage(&self) -> u64 {
-        (8_u64 * 2_u64) * (2_u64.pow(self.num_qubits))
+        (2_u64 * 8_u64 * 2_u64) * (2_u64.pow(self.num_qubits))
     }
 
     /// Returns the number of qubits represented in the `QubitLayer`.  

@@ -3,10 +3,9 @@
 # pyright: reportMissingTypeStubs=false
 """Compare qsim_statevec_cpu against Qiskit on every circuit in qasm_files/reference/.
 
-Runs
-
-Runs with any Python 3: on first use, Qiskit is installed into functional_tests/.venv
-and the script re-executes itself with that interpreter.
+Runs with any Python 3: Qiskit is installed into functional_tests/.venv on first use
+(and again whenever requirements.txt changes), and the script re-executes itself with
+that interpreter.
 
 TODO: Implement noisy simulation functional tests and compare against Qiskit with noise models.
 """
@@ -20,8 +19,21 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
 CIRCUITS_DIR = REPO_ROOT / "qasm_files" / "reference"
-VENV_PYTHON = SCRIPT_DIR / ".venv" / "bin" / "python"
+VENV_DIR = SCRIPT_DIR / ".venv"
+VENV_PYTHON = VENV_DIR / "bin" / "python"
+REQUIREMENTS = SCRIPT_DIR / "requirements.txt"
+# Written after a successful install; a missing or stale stamp triggers a (re)install
+INSTALL_STAMP = VENV_DIR / ".requirements-installed"
 ABS_TOLERANCE = 1e-9
+
+
+def venv_up_to_date() -> bool:
+    return (
+        VENV_PYTHON.exists()
+        and INSTALL_STAMP.exists()
+        and INSTALL_STAMP.stat().st_mtime >= REQUIREMENTS.stat().st_mtime
+    )
+
 
 try:
     from qiskit import qasm3
@@ -29,20 +41,14 @@ try:
 except ImportError:
     if os.environ.get("QSIM_FT_BOOTSTRAPPED"):
         raise
-    print("Setting up the Qiskit virtual environment...", file=sys.stderr)
-    subprocess.run([sys.executable, "-m", "venv", SCRIPT_DIR / ".venv"], check=True)
-    subprocess.run(
-        [
-            VENV_PYTHON,
-            "-m",
-            "pip",
-            "install",
-            "-q",
-            "-r",
-            SCRIPT_DIR / "requirements.txt",
-        ],
-        check=True,
-    )
+    if not venv_up_to_date():
+        print("Setting up the Qiskit virtual environment...", file=sys.stderr)
+        subprocess.run([sys.executable, "-m", "venv", VENV_DIR], check=True)
+        subprocess.run(
+            [VENV_PYTHON, "-m", "pip", "install", "-q", "-r", REQUIREMENTS],
+            check=True,
+        )
+        INSTALL_STAMP.touch()
     os.environ["QSIM_FT_BOOTSTRAPPED"] = "1"
     os.execv(VENV_PYTHON, [VENV_PYTHON, __file__, *sys.argv[1:]])
 

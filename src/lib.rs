@@ -2,7 +2,7 @@
 //!
 //! Provides an abstraction for quantum circuit simulations.
 //! Uses the state vector simulation method running on CPU using main system memory.
-//! Memory consumption is 8 * 2 * 2<sup>`num_qubits`</sup> bytes. For example, simulating 25 qubits costs ~537 MB.
+//! Memory consumption is 2 * 8 * 2 * 2<sup>`num_qubits`</sup> bytes. For example, simulating 25 qubits costs ~1.07 GB.
 //!
 //! # Example
 //!
@@ -91,30 +91,30 @@ pub fn execute_noisy_shots(
 
     let mut accumulated_results: MeasuredQubits = vec![0.0; circuit.num_qubits as usize].into();
 
-    // Inject errors in the circuit as gates
     let mut rng = rand::rng();
-    let mut gates_with_noise: Vec<QSimGate> = Vec::with_capacity(circuit.gates.len());
-    for it in circuit.gates {
-        gates_with_noise.push(it);
-
-        // Affect one of qubit's 3 axis via Pauli gate application
-        if rng.random::<f64>() < noise_model.gate_error_prob {
-            let pauli = match rng.random_range(0..3) {
-                0 => SingleQubitOp::PauliX,
-                1 => SingleQubitOp::PauliY,
-                _ => SingleQubitOp::PauliZ,
-            };
-            gates_with_noise.push(QSimGate::Single {
-                op: pauli,
-                target: it.target(),
-            });
-        }
-    }
-
     for _ in 0..shots {
+        // Inject errors in the circuit as gates
+        let mut gates_with_noise: Vec<QSimGate> = Vec::with_capacity(circuit.gates.len());
+        for &it in &circuit.gates {
+            gates_with_noise.push(it);
+
+            // Affect one of qubit's 3 axis via Pauli gate application
+            if rng.random::<f64>() < noise_model.gate_error_prob {
+                let pauli = match rng.random_range(0..3) {
+                    0 => SingleQubitOp::PauliX,
+                    1 => SingleQubitOp::PauliY,
+                    _ => SingleQubitOp::PauliZ,
+                };
+                gates_with_noise.push(QSimGate::Single {
+                    op: pauli,
+                    target: it.target(),
+                });
+            }
+        }
+
         let mut results = execute_noiseless(QSimCircuit {
             num_qubits: circuit.num_qubits,
-            gates: gates_with_noise.clone(),
+            gates: gates_with_noise,
         })?;
 
         // Randomly flips the probability of the result
@@ -127,15 +127,13 @@ pub fn execute_noisy_shots(
         accumulated_results += &results;
     }
 
-    if shots > 0 {
-        accumulated_results /= shots.into();
-    }
+    accumulated_results /= shots.into();
 
     Ok(accumulated_results)
 }
 
 /// Executes noiseless quantum circuit.
-/// Receives a `ParsedCircuit`, converts to `QSim` gate types and executes on a `QubitLayer`.
+/// Receives a `QSimCircuit` and executes on a `QubitLayer`.
 ///
 /// # Examples
 /// ```

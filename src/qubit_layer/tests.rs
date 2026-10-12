@@ -82,7 +82,7 @@ mod qubitlayer_tests {
         let num_qubits = 20;
         let q_layer: QubitLayer = QubitLayer::new(num_qubits);
 
-        let expected = (8_u64 * 2_u64) * (2_u64.pow(num_qubits));
+        let expected = (2_u64 * 8_u64 * 2_u64) * (2_u64.pow(num_qubits));
         assert_eq!(expected, q_layer.get_mem_usage());
     }
 
