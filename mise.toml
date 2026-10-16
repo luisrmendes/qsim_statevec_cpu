@@ -1,0 +1,66 @@
+# Project toolchain and dev tasks. Run `mise install` once, then `mise tasks` to list tasks.
+
+[tools]
+rust = { version = "stable", components = "rustfmt,clippy" }
+# Matches CI; the functional tests create their own venv in functional_tests/.venv
+python = "3.11"
+cargo-binstall = "latest"
+"cargo:cargo-deny" = "latest"
+
+[env]
+CARGO_TERM_COLOR = "always"
+
+[tasks.build]
+description = "Build"
+alias = "b"
+run = "cargo build"
+
+[tasks.build-release]
+description = "Build release"
+alias = "br"
+run = "cargo build --release"
+
+[tasks.fmt]
+description = "Format code"
+run = "cargo fmt"
+
+[tasks.lint]
+description = "Run linter"
+run = "cargo clippy -- -D warnings"
+
+[tasks.lint_pedantic]
+description = "Run linter with pedantic lints"
+run = "cargo clippy -- -W clippy::pedantic"
+
+[tasks.unit_tests]
+description = "Run unit tests"
+alias = "ut"
+run = "cargo test"
+
+[tasks.functional_tests]
+description = "Run functional tests against Qiskit"
+alias = "func"
+run = "python ./functional_tests/run_functional_tests.py"
+
+[tasks.audit]
+description = "Scan dependencies for vulnerabilities"
+run = "cargo deny check advisories"
+
+[tasks.clean]
+description = "Clean build artifacts"
+alias = "cln"
+run = "cargo clean"
+
+[tasks.ci]
+description = "Run the same checks as CI"
+run = [
+  "cargo fmt --check",
+  "cargo clippy -- -D warnings",
+  "cargo test",
+  { task = "functional_tests" },
+  { task = "audit" },
+]
+
+[tasks.setup-hooks]
+description = "Use the repo's git hooks"
+run = "git config core.hooksPath .githooks"
